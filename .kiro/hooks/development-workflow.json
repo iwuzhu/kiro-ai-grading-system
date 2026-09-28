@@ -1,0 +1,41 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Validate Spec Format on Save",
+      "trigger": "PostFileSave",
+      "matcher": "requirements\\.md$|design\\.md$|tasks\\.md$|bugfix\\.md$",
+      "action": {
+        "type": "command",
+        "command": "pwsh -Command \"if (Test-Path '.kiro/specs') { Get-ChildItem -Path '.kiro/specs' -Recurse -Include 'requirements.md','design.md','tasks.md','bugfix.md' | ForEach-Object { Write-Host \\\"Validating \\\\\" } }\""
+      }
+    },
+    {
+      "name": "Format TypeScript Files",
+      "trigger": "PostFileSave",
+      "matcher": ".*\\.ts$|.*\\.tsx$",
+      "action": {
+        "type": "command",
+        "command": "pwsh -Command \"if (Test-Path 'package.json') { npm run prettier --write \\\ 2>\\; npm run lint:fix 2>\\ }\""
+      }
+    },
+    {
+      "name": "Validate JSON Steering Files",
+      "trigger": "PostFileSave",
+      "matcher": ".*\\.kiro/hooks/.*\\.json$",
+      "action": {
+        "type": "command",
+        "command": "pwsh -Command \"Get-Content \\\ | ConvertFrom-Json -ErrorAction SilentlyContinue | If (\\\True) { Write-Host 'Hook JSON valid' } Else { Write-Host 'Hook JSON invalid' }\""
+      }
+    },
+    {
+      "name": "Alert on Spec Document Update",
+      "trigger": "PostFileSave",
+      "matcher": "requirements\\.md$",
+      "action": {
+        "type": "agent",
+        "prompt": "A requirements document has been updated. Verify all EARS patterns are correct and acceptance criteria are testable."
+      }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "Rules": [
+    {
+      "Id": "DeleteOldDailyBackups",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "daily/"
+      },
+      "Expiration": {
+        "Days": 30
+      },
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 30
+      },
+      "Description": "Delete daily backups older than 30 days"
+    },
+    {
+      "Id": "TransitionDailyToStandardIA",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "daily/"
+      },
+      "Transitions": [
+        {
+          "Days": 7,
+          "StorageClass": "STANDARD_IA"
+        },
+        {
+          "Days": 14,
+          "StorageClass": "GLACIER"
+        }
+      ],
+      "Description": "Transition daily backups to cheaper storage after 7 and 14 days"
+    },
+    {
+      "Id": "DeleteOldWeeklyBackups",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "weekly/"
+      },
+      "Expiration": {
+        "Days": 84
+      },
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 84
+      },
+      "Description": "Delete weekly backups older than 12 weeks (84 days)"
+    },
+    {
+      "Id": "TransitionWeeklyToGlacier",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "weekly/"
+      },
+      "Transitions": [
+        {
+          "Days": 30,
+          "StorageClass": "GLACIER"
+        }
+      ],
+      "Description": "Transition weekly backups to Glacier after 30 days"
+    }
+  ]
+}

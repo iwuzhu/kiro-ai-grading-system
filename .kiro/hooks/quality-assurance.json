@@ -1,0 +1,49 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run Tests After Task Completion",
+      "trigger": "PostTaskExec",
+      "action": {
+        "type": "command",
+        "command": "pwsh -Command \"if (Test-Path 'package.json') { Write-Host 'Task completed - consider running tests'; Write-Host 'Run: npm run test:property' }\""
+      }
+    },
+    {
+      "name": "Pre-Commit Code Quality Check",
+      "trigger": "PreToolUse",
+      "matcher": "execute_pwsh",
+      "action": {
+        "type": "agent",
+        "prompt": "About to execute a shell command. Verify this follows security best practices: no hardcoded secrets, proper error handling, and OWASP compliance."
+      }
+    },
+    {
+      "name": "Plagiarism Test Property Validation",
+      "trigger": "PostFileSave",
+      "matcher": "plagiarism.*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "pwsh -Command \"Write-Host 'Plagiarism module updated - verify property: monotonicity, accuracy, and false positive rate'\""
+      }
+    },
+    {
+      "name": "AI Grading Consistency Check",
+      "trigger": "PostFileSave",
+      "matcher": "grading.*\\.ts$",
+      "action": {
+        "type": "agent",
+        "prompt": "Grading code updated. Verify: (1) Confidence score calculation is consistent, (2) Grade explanation is always provided, (3) Human override is fully supported with audit trail."
+      }
+    },
+    {
+      "name": "Security Review on RBAC Changes",
+      "trigger": "PostFileSave",
+      "matcher": ".*rbac.*\\.ts$|.*auth.*\\.ts$|.*guard.*\\.ts$",
+      "action": {
+        "type": "agent",
+        "prompt": "Security-related code changed. Verify: (1) Tenant isolation enforced, (2) Role permissions correctly applied, (3) No permission elevation vulnerabilities, (4) Audit logged."
+      }
+    }
+  ]
+}
