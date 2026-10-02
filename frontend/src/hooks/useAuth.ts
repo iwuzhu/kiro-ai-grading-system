@@ -36,7 +36,7 @@ export function useAuth(): UseAuthReturn {
 
         // Verify token is still valid by calling /auth/me
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/auth/me`,
+          `${process.env.NEXT_PUBLIC_API_URL}/v1/auth/me`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -63,7 +63,7 @@ export function useAuth(): UseAuthReturn {
 
   const login = async (email: string, password: string) => {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
+      `${process.env.NEXT_PUBLIC_API_URL}/v1/auth/login`,
       {
         method: 'POST',
         headers: {
@@ -85,7 +85,7 @@ export function useAuth(): UseAuthReturn {
 
   const logout = async () => {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/auth/logout`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -107,7 +107,7 @@ export function useAuth(): UseAuthReturn {
     }
 
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
+      `${process.env.NEXT_PUBLIC_API_URL}/v1/auth/refresh`,
       {
         method: 'POST',
         headers: {
