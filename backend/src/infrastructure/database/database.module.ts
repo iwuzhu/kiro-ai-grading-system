@@ -20,9 +20,9 @@ export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
-  username: process.env.DB_USERNAME || 'grading_user',
+  username: process.env.DB_USERNAME || 'tecbridgeai',
   password: process.env.DB_PASSWORD || 'change_me',
-  database: process.env.DB_NAME || 'shared_database',
+  database: process.env.DB_NAME || 'tec-bridgeaidb',
 
   /**
    * Schema Configuration
