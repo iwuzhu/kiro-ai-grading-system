@@ -1,5 +1,4 @@
-import { API_BASE_URL, AUTH_ENDPOINTS } from './endpoints';
-import { ApiResponse, ApiErrorResponse } from './types';
+import { API_BASE_URL } from './endpoints';
 
 export interface RequestConfig {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
