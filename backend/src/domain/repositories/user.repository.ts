@@ -280,4 +280,20 @@ export class UserRepository extends Repository<User> {
     user.status = 'INACTIVE';
     return this.save(user);
   }
+
+  /**
+   * Update last login timestamp
+   * @param tenantId - Tenant ID
+   * @param userId - User ID
+   * @returns Updated user
+   */
+  async updateLastLogin(tenantId: string, userId: string): Promise<User | null> {
+    const user = await this.findById(tenantId, userId);
+    if (!user) {
+      return null;
+    }
+
+    user.last_login = new Date();
+    return this.save(user);
+  }
 }

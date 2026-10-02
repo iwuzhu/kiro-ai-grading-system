@@ -128,13 +128,9 @@ export class AuthController {
       const response = this.jwtService.createTokenPair({
         id: user.id,
         email: user.email,
-        name: user.name,
         tenant_id: user.tenant_id,
-        institution_id: user.institution_id,
         role: user.role as UserRole,
         permissions: user.permissions || [],
-        created_at: user.created_at,
-        updated_at: user.updated_at,
       });
 
       // Set refresh token in secure cookie

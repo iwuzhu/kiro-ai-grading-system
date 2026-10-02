@@ -186,6 +186,15 @@ export class User {
   deleted_at: Date | null;
 
   /**
+   * Last Login At
+   * Timestamp of the last successful login
+   * Null if user has never logged in
+   * Updated on each successful authentication
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  last_login: Date | null;
+
+  /**
    * Relations
    */
 
