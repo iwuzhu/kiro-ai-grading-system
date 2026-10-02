@@ -36,6 +36,7 @@ import {
   OAuth2StrategyFactory,
 } from './sso.strategy';
 import { AuthController } from './auth.controller';
+import { UserRepository } from '../../domain/repositories/user.repository';
 
 @Module({
   imports: [
@@ -58,6 +59,9 @@ import { AuthController } from './auth.controller';
   providers: [
     // JWT token service (core JWT logic)
     JwtTokenService,
+
+    // Repositories
+    UserRepository,
 
     // Passport strategies
     JwtStrategy,
