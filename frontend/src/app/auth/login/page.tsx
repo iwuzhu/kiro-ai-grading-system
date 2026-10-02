@@ -88,7 +88,7 @@ export default function LoginPage() {
           <p className="text-xs text-gray-600 mb-2">Test Credentials:</p>
           <p className="text-xs text-gray-500">Admin: admin@deepgrader.com / Password123!</p>
           <p className="text-xs text-gray-500">Instructor: teacher1@deepgrader.com / Password123!</p>
-          <p className="text-xs text-gray-500">Student: student@deepgrader.com / Password123!</p>
+          <p className="text-xs text-gray-500">Student: student1@deepgrader.com / Password123!</p>
         </div>
       </div>
     </div>
