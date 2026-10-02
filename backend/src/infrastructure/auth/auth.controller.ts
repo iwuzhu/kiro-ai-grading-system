@@ -46,7 +46,7 @@ const REFRESH_COOKIE_OPTIONS = {
   path: '/',
 };
 
-@Controller('api/v1/auth')
+@Controller('auth')
 export class AuthController {
   constructor(
     private readonly jwtService: JwtTokenService,
