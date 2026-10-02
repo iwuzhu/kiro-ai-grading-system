@@ -30,6 +30,7 @@
         "db:migrate:show": "npm run typeorm:migration:show"
     },
     "dependencies": {
+        "@aws-sdk/client-secrets-manager": "^3.1146.0",
         "@nestjs/common": "^10.3.0",
         "@nestjs/config": "^3.1.1",
         "@nestjs/core": "^10.3.0",
