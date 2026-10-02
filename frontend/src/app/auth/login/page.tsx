@@ -84,10 +84,10 @@ export default function LoginPage() {
 
         {/* Demo Credentials */}
         <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-xs text-gray-600 mb-2">Demo Credentials:</p>
-          <p className="text-xs text-gray-500">Admin: admin@example.com / password</p>
-          <p className="text-xs text-gray-500">Instructor: instructor@example.com / password</p>
-          <p className="text-xs text-gray-500">Student: student@example.com / password</p>
+          <p className="text-xs text-gray-600 mb-2">Test Credentials:</p>
+          <p className="text-xs text-gray-500">Admin: admin@deepgrader.com / Password123!</p>
+          <p className="text-xs text-gray-500">Instructor: teacher1@deepgrader.com / Password123!</p>
+          <p className="text-xs text-gray-500">Student: student@deepgrader.com / Password123!</p>
         </div>
       </div>
     </div>
