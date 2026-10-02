@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSourceOptions, DataSource } from 'typeorm';
 import * as path from 'path';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { DatabaseInitializationService } from './database-initialization.service';
 
 /**
  * Database Module Configuration
@@ -177,6 +178,7 @@ export function getCredentialsPromise() {
       },
     }),
   ],
+  providers: [DatabaseInitializationService],
 })
 export class DatabaseModule {}
 
