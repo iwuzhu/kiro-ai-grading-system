@@ -272,9 +272,18 @@ export class CourseManagementService {
       userId,
     );
     
-    // Filter by role and extract course data
+    // Filter by role, deduplicate by course ID, and extract course data
+    const seenCourseIds = new Set<string>();
     return enrollments
       .filter(e => e.role === role)
+      .filter(e => {
+        // Skip if we've already seen this course
+        if (seenCourseIds.has(e.course.id)) {
+          return false;
+        }
+        seenCourseIds.add(e.course.id);
+        return true;
+      })
       .map(e => ({
         id: e.course.id,
         code: e.course.code,

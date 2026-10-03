@@ -74,7 +74,7 @@ export class AssignmentsController {
       const assignment = await this.assignmentService.createAssignment(
         tenantId,
         courseId,
-        user.sub,
+        user.id,
         {
           ...createAssignmentDto,
           soft_deadline: createAssignmentDto.soft_deadline
@@ -185,7 +185,7 @@ export class AssignmentsController {
       const assignment = await this.assignmentService.updateAssignment(
         tenantId,
         assignmentId,
-        user.sub,
+        user.id,
         {
           ...updateAssignmentDto,
           soft_deadline: updateAssignmentDto.soft_deadline
@@ -225,7 +225,7 @@ export class AssignmentsController {
       const assignment = await this.assignmentService.publishAssignment(
         tenantId,
         assignmentId,
-        user.sub,
+        user.id,
       );
 
       return {
@@ -256,7 +256,7 @@ export class AssignmentsController {
       const assignment = await this.assignmentService.unpublishAssignment(
         tenantId,
         assignmentId,
-        user.sub,
+        user.id,
       );
 
       return {
@@ -287,7 +287,7 @@ export class AssignmentsController {
       const assignment = await this.assignmentService.deleteAssignment(
         tenantId,
         assignmentId,
-        user.sub,
+        user.id,
       );
 
       return {

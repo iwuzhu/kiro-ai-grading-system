@@ -109,13 +109,13 @@ export class CoursesController {
       if (user.role === 'STUDENT') {
         courses = await this.courseManagementService.getUserCourses(
           tenantId,
-          user.sub,
+          user.id,
           'STUDENT',
         );
       } else if (user.role === 'INSTRUCTOR' || user.role === 'ADMIN') {
         courses = await this.courseManagementService.getUserCourses(
           tenantId,
-          user.sub,
+          user.id,
           'INSTRUCTOR',
         );
       } else {
@@ -150,7 +150,7 @@ export class CoursesController {
       const canView = await this.courseManagementService.canViewCourse(
         tenantId,
         courseId,
-        user.sub,
+        user.id,
       );
 
       if (!canView) {
@@ -192,7 +192,7 @@ export class CoursesController {
       const course = await this.courseManagementService.updateCourse(
         tenantId,
         courseId,
-        user.sub,
+        user.id,
         {
           ...updateCourseDto,
           semester_start: updateCourseDto.semester_start
@@ -232,7 +232,7 @@ export class CoursesController {
       const course = await this.courseManagementService.archiveCourse(
         tenantId,
         courseId,
-        user.sub,
+        user.id,
       );
 
       return {
@@ -263,7 +263,7 @@ export class CoursesController {
       const course = await this.courseManagementService.deleteCourse(
         tenantId,
         courseId,
-        user.sub,
+        user.id,
       );
 
       return {
