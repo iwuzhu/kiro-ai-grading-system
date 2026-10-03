@@ -138,6 +138,16 @@ export class Submission {
   file_type: string | null;
 
   /**
+   * Content
+   * Text submission content for essay/short answer/quiz submissions
+   * Stores the actual student written content
+   * Null for file-based submissions
+   * Unlimited length (TEXT type)
+   */
+  @Column({ type: 'text', nullable: true })
+  content: string | null;
+
+  /**
    * Is Late
    * Flag indicating if this submission was submitted after soft deadline
    * - true: Submitted after soft_deadline (late penalty applies)

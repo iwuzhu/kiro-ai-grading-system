@@ -216,8 +216,9 @@ export class SubmissionRepository extends Repository<Submission> {
     assignment_id: string;
     student_id: string;
     version?: number;
-    file_path: string;
-    file_type: string;
+    file_path?: string;
+    file_type?: string;
+    content?: string;
     is_incremental?: boolean;
     is_late?: boolean;
     submitted_at?: Date;
@@ -227,8 +228,9 @@ export class SubmissionRepository extends Repository<Submission> {
       assignment_id: data.assignment_id,
       student_id: data.student_id,
       version: data.version || 1,
-      file_path: data.file_path,
-      file_type: data.file_type,
+      file_path: data.file_path || null,
+      file_type: data.file_type || null,
+      content: data.content || null,
       is_incremental: data.is_incremental || false,
       is_late: data.is_late || false,
       submitted_at: data.submitted_at || new Date(),

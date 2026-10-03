@@ -61,9 +61,9 @@ export function useSubmission(): UseSubmissionReturn {
         // Prepare submission payload
         // Note: In production, file would be uploaded to S3 first, then S3 path sent here
         const payload = {
-          file_path: data.filePath || `submissions/${assignmentId}/${data.fileName || 'submission'}`,
-          file_type: data.fileType || 'txt',
-          content: data.content,
+          file_path: data.filePath || null,
+          file_type: data.fileType || null,
+          content: data.content || null,
         }
 
         // Call backend API

@@ -44,8 +44,9 @@ export class SubmissionManagementService {
    * @param tenantId - Tenant ID
    * @param assignmentId - Assignment ID
    * @param studentId - Student ID
-   * @param filePath - S3 path to uploaded file
+   * @param filePath - S3 path to uploaded file (for file-based submissions)
    * @param fileType - File type (pdf, docx, py, etc.)
+   * @param content - Text content (for text-based submissions)
    * @returns Created submission
    */
   async createSubmission(
@@ -54,6 +55,7 @@ export class SubmissionManagementService {
     studentId: string,
     filePath: string,
     fileType: string,
+    content?: string,
   ): Promise<Submission> {
     // Step 1: Validate assignment exists and is published
     const assignment = await this.assignmentRepository.findOne({
@@ -115,6 +117,7 @@ export class SubmissionManagementService {
       version: nextVersion,
       file_path: filePath,
       file_type: fileType,
+      content: content || null,
       is_incremental: isIncremental,
       is_late: isLate,
       submitted_at: now,

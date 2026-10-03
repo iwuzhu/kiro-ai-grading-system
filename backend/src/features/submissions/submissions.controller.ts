@@ -110,7 +110,7 @@ export class SubmissionsController {
     try {
       // In production, would parse multipart file upload
       // For now, accept file data in body for testing
-      const { file_path, file_type } = request.body;
+      const { file_path, file_type, content } = request.body;
 
       const submission = await this.submissionManagementService.createSubmission(
         tenantId,
@@ -118,6 +118,7 @@ export class SubmissionsController {
         user.id,
         file_path,
         file_type,
+        content,
       );
 
       return {
