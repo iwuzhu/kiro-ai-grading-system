@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
-import { Card, LoadingSpinner } from '@/components/common'
+import { Card, LoadingSpinner, SubmissionViewer } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
 
 interface Submission {
@@ -285,168 +285,187 @@ export default function GradeSubmissionPage() {
               </Card>
             )}
 
-            {/* Submission Summary */}
-            <Card>
-              <div className="space-y-3">
-                <h2 className="text-xl font-semibold text-gray-900">Submission Information</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-600">Student ID</p>
-                    <p className="font-medium text-gray-900 truncate">
-                      {submission.student_id}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-gray-600">Submitted</p>
-                    <p className="font-medium text-gray-900">
-                      {new Date(submission.submitted_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-gray-600">Status</p>
-                    <p className={`font-medium ${submission.is_late ? 'text-red-600' : 'text-green-600'}`}>
-                      {submission.is_late ? 'Late' : 'On Time'}
-                    </p>
-                  </div>
-                </div>
+            {/* Two Column Layout: Submission Viewer + Grading Form */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Left Column: Submission Viewer (1/3 width on large screens) */}
+              <div className="lg:col-span-1">
+                <Card>
+                  <SubmissionViewer
+                    submissionId={submission.id}
+                    filePath={submission.file_path}
+                    fileType={submission.file_type}
+                    assignmentType={assignment.type}
+                    isLoading={loading}
+                  />
+                </Card>
               </div>
-            </Card>
 
-            {/* Grading Form */}
-            <Card>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Score */}
-                <div>
-                  <label htmlFor="score" className="block text-sm font-semibold text-gray-700 mb-2">
-                    Score *
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      id="score"
-                      name="score"
-                      value={formData.score}
-                      onChange={handleInputChange}
-                      min="0"
-                      max={assignment.point_value}
-                      step="0.01"
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                      required
-                    />
-                    <span className="text-gray-600">/ {assignment.point_value}</span>
+              {/* Right Column: Submission Info + Grading Form (2/3 width on large screens) */}
+              <div className="lg:col-span-2 space-y-4">
+                {/* Submission Summary */}
+                <Card>
+                  <div className="space-y-3">
+                    <h2 className="text-xl font-semibold text-gray-900">Submission Information</h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-600">Student ID</p>
+                        <p className="font-medium text-gray-900 truncate">
+                          {submission.student_id}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-gray-600">Submitted</p>
+                        <p className="font-medium text-gray-900">
+                          {new Date(submission.submitted_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-gray-600">Status</p>
+                        <p className={`font-medium ${submission.is_late ? 'text-red-600' : 'text-green-600'}`}>
+                          {submission.is_late ? 'Late' : 'On Time'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter a score between 0 and {assignment.point_value}
-                  </p>
-                </div>
+                </Card>
 
-                {/* Feedback */}
-                <div>
-                  <label htmlFor="feedback" className="block text-sm font-semibold text-gray-700 mb-2">
-                    Feedback *
-                  </label>
-                  <textarea
-                    id="feedback"
-                    name="feedback"
-                    value={formData.feedback}
-                    onChange={handleInputChange}
-                    placeholder="Provide detailed feedback about this submission"
-                    rows={5}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Minimum 20 characters required
-                  </p>
-                </div>
+                {/* Grading Form */}
+                <Card>
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Score */}
+                    <div>
+                      <label htmlFor="score" className="block text-sm font-semibold text-gray-700 mb-2">
+                        Score *
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          id="score"
+                          name="score"
+                          value={formData.score}
+                          onChange={handleInputChange}
+                          min="0"
+                          max={assignment.point_value}
+                          step="0.01"
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                          required
+                        />
+                        <span className="text-gray-600">/ {assignment.point_value}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Enter a score between 0 and {assignment.point_value}
+                      </p>
+                    </div>
 
-                {/* Strengths */}
-                <div>
-                  <label htmlFor="strengths" className="block text-sm font-semibold text-gray-700 mb-2">
-                    Strengths *
-                  </label>
-                  <textarea
-                    id="strengths"
-                    name="strengths"
-                    value={formData.strengths}
-                    onChange={handleInputChange}
-                    placeholder="List strengths of this submission (one per line)"
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter at least one strength (press Enter for multiple)
-                  </p>
-                </div>
+                    {/* Feedback */}
+                    <div>
+                      <label htmlFor="feedback" className="block text-sm font-semibold text-gray-700 mb-2">
+                        Feedback *
+                      </label>
+                      <textarea
+                        id="feedback"
+                        name="feedback"
+                        value={formData.feedback}
+                        onChange={handleInputChange}
+                        placeholder="Provide detailed feedback about this submission. Include specific line references or quotes for inline comments."
+                        rows={5}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Minimum 20 characters required. Add specific references to the submission for targeted feedback.
+                      </p>
+                    </div>
 
-                {/* Improvements */}
-                <div>
-                  <label htmlFor="improvements" className="block text-sm font-semibold text-gray-700 mb-2">
-                    Areas for Improvement *
-                  </label>
-                  <textarea
-                    id="improvements"
-                    name="improvements"
-                    value={formData.improvements}
-                    onChange={handleInputChange}
-                    placeholder="List areas for improvement (one per line)"
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter at least one area for improvement (press Enter for multiple)
-                  </p>
-                </div>
+                    {/* Strengths */}
+                    <div>
+                      <label htmlFor="strengths" className="block text-sm font-semibold text-gray-700 mb-2">
+                        Strengths *
+                      </label>
+                      <textarea
+                        id="strengths"
+                        name="strengths"
+                        value={formData.strengths}
+                        onChange={handleInputChange}
+                        placeholder="List strengths of this submission (one per line)"
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Enter at least one strength (press Enter for multiple)
+                      </p>
+                    </div>
 
-                {/* Error Message */}
-                {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-red-800 text-sm">{error}</p>
+                    {/* Improvements */}
+                    <div>
+                      <label htmlFor="improvements" className="block text-sm font-semibold text-gray-700 mb-2">
+                        Areas for Improvement *
+                      </label>
+                      <textarea
+                        id="improvements"
+                        name="improvements"
+                        value={formData.improvements}
+                        onChange={handleInputChange}
+                        placeholder="List areas for improvement (one per line)"
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Enter at least one area for improvement (press Enter for multiple)
+                      </p>
+                    </div>
+
+                    {/* Error Message */}
+                    {error && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p className="text-red-800 text-sm">{error}</p>
+                      </div>
+                    )}
+
+                    {/* Submit Buttons */}
+                    <div className="flex gap-4 pt-4 border-t border-gray-200">
+                      <button
+                        type="submit"
+                        disabled={saving}
+                        className={`px-6 py-2 rounded-lg text-white font-medium transition ${
+                          saving
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-700'
+                        }`}
+                      >
+                        {saving ? 'Saving...' : 'Save Grade'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBack}
+                        className="px-6 py-2 rounded-lg text-gray-700 font-medium border border-gray-300 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </Card>
+
+                {/* Info Box */}
+                <Card>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-blue-800 font-semibold mb-2">ℹ️ Grading Guidelines</p>
+                    <ul className="text-blue-700 text-sm space-y-1">
+                      <li>• Provide constructive feedback that is actionable and specific</li>
+                      <li>• Highlight strengths to reinforce good practices</li>
+                      <li>• Suggest areas for improvement to support student growth</li>
+                      <li>• Score should reflect the assignment rubric requirements</li>
+                      <li>• Late penalty of {assignment.point_value * 0.1} points will be applied if applicable</li>
+                    </ul>
                   </div>
-                )}
-
-                {/* Submit Buttons */}
-                <div className="flex gap-4 pt-4 border-t border-gray-200">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className={`px-6 py-2 rounded-lg text-white font-medium transition ${
-                      saving
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
-                  >
-                    {saving ? 'Saving...' : 'Save Grade'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleBack}
-                    className="px-6 py-2 rounded-lg text-gray-700 font-medium border border-gray-300 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </Card>
-
-            {/* Info Box */}
-            <Card>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-blue-800 font-semibold mb-2">ℹ️ Grading Guidelines</p>
-                <ul className="text-blue-700 text-sm space-y-1">
-                  <li>• Provide constructive feedback that is actionable and specific</li>
-                  <li>• Highlight strengths to reinforce good practices</li>
-                  <li>• Suggest areas for improvement to support student growth</li>
-                  <li>• Score should reflect the assignment rubric requirements</li>
-                  <li>• Late penalty of {assignment.point_value * 0.1} points will be applied if applicable</li>
-                </ul>
+                </Card>
               </div>
-            </Card>
+            </div>
           </div>
         ) : null}
       </div>
