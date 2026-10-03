@@ -44,6 +44,10 @@ export default function InstructorCourseDetailPage() {
     router.push(`/dashboard/instructor/courses/${courseId}/students`)
   }
 
+  const handleCourseSettings = () => {
+    router.push(`/dashboard/instructor/courses/${courseId}/settings`)
+  }
+
   useEffect(() => {
     const fetchCourse = async () => {
       try {
@@ -190,7 +194,10 @@ export default function InstructorCourseDetailPage() {
                 >
                   View Enrolled Students
                 </button>
-                <button className="w-full bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">
+                <button 
+                  onClick={handleCourseSettings}
+                  className="w-full bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+                >
                   Course Settings
                 </button>
               </div>
