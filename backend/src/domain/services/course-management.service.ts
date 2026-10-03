@@ -151,15 +151,18 @@ export class CourseManagementService {
       status?: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
     },
   ): Promise<any> {
-    // Verify course exists and user is owner
+    // Verify course exists
     const course = await this.courseRepository.findById(tenantId, courseId);
     if (!course) {
       throw new NotFoundException('Course not found');
     }
 
-    if (course.created_by_user_id !== userId) {
+    // Check if user can edit this course
+    // Owner can always edit, other instructors can edit active courses
+    const canEdit = await this.canEditCourse(tenantId, courseId, userId);
+    if (!canEdit) {
       throw new ForbiddenException(
-        'Only the course owner can modify this course',
+        'Only instructors enrolled in this course can modify it',
       );
     }
 
@@ -264,10 +267,26 @@ export class CourseManagementService {
     userId: string,
     role: 'INSTRUCTOR' | 'STUDENT',
   ): Promise<any[]> {
-    return this.enrollmentRepository.findCoursesForUser(
+    const enrollments = await this.enrollmentRepository.findCoursesForUser(
       tenantId,
       userId,
-    ).then(allCourses => allCourses.filter(e => e.role === role));
+    );
+    
+    // Filter by role and extract course data
+    return enrollments
+      .filter(e => e.role === role)
+      .map(e => ({
+        id: e.course.id,
+        code: e.course.code,
+        title: e.course.title,
+        description: e.course.description,
+        status: e.course.status,
+        created_at: e.course.created_at,
+        updated_at: e.course.updated_at,
+        semester_start: e.course.semester_start,
+        semester_end: e.course.semester_end,
+        institution_id: e.course.institution_id,
+      }));
   }
 
   /**
