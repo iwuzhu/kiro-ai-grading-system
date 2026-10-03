@@ -9,6 +9,7 @@ import { SubmissionRepository } from '../../domain/repositories/submission.repos
 import { AssignmentRepository } from '../../domain/repositories/assignment.repository';
 import { GradeRepository } from '../../domain/repositories/grade.repository';
 import { S3Service } from '../../infrastructure/storage/s3.service';
+import { SubmissionUploadService } from './submission-upload.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Submission, Assignment, Grade])],
@@ -19,6 +20,7 @@ import { S3Service } from '../../infrastructure/storage/s3.service';
     AssignmentRepository,
     GradeRepository,
     S3Service,
+    SubmissionUploadService,
   ],
   exports: [SubmissionManagementService, SubmissionRepository, GradeRepository],
 })

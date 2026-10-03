@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -17,6 +18,7 @@ import { SubmissionManagementService } from '../../domain/services/submission-ma
 import { SubmissionRepository } from '../../domain/repositories/submission.repository';
 import { GradeRepository } from '../../domain/repositories/grade.repository';
 import { S3Service } from '../../infrastructure/storage/s3.service';
+import { SubmissionUploadService } from './submission-upload.service';
 import { UserRole } from '../../infrastructure/auth/types';
 
 /**
@@ -38,6 +40,7 @@ export class SubmissionsController {
   constructor(
     private submissionManagementService: SubmissionManagementService,
     private submissionRepository: SubmissionRepository,
+    private submissionUploadService: SubmissionUploadService,
     private gradeRepository: GradeRepository,
     private s3Service: S3Service,
   ) {}
@@ -112,13 +115,48 @@ export class SubmissionsController {
       // For now, accept file data in body for testing
       const { file_path, file_type, content } = request.body;
 
+      if (!content) {
+        throw new BadRequestException('No content provided for submission');
+      }
+
+      // Determine file type from fileName or use provided file_type
+      const fileName = request.body.fileName || `submission_${Date.now()}.txt`;
+      const contentType = file_type || fileName.split('.').pop()?.toLowerCase() || 'txt';
+
+      // Convert content to buffer if it's a string
+      let contentBuffer: Buffer;
+      if (typeof content === 'string') {
+        // Check if it's base64 (file upload) or plain text
+        if (content.startsWith('data:') || content.includes(';base64,')) {
+          // Base64 encoded file
+          const base64Data = content.split(',')[1] || content;
+          contentBuffer = Buffer.from(base64Data, 'base64');
+        } else {
+          // Plain text submission
+          contentBuffer = Buffer.from(content, 'utf-8');
+        }
+      } else {
+        contentBuffer = content;
+      }
+
+      // Upload to S3
+      const s3Uri = await this.submissionUploadService.uploadSubmissionContent(
+        tenantId,
+        assignmentId,
+        user.id,
+        contentBuffer,
+        fileName,
+        contentType,
+      );
+
+      // Create submission with S3 URI in file_path
       const submission = await this.submissionManagementService.createSubmission(
         tenantId,
         assignmentId,
         user.id,
-        file_path,
-        file_type,
-        content,
+        s3Uri, // S3 URI stored in file_path
+        contentType,
+        null, // No content stored in DB (it's in S3)
       );
 
       return {
