@@ -46,55 +46,225 @@ export class SubmissionsController {
   ) {}
 
   /**
-   * GET /api/v1/submissions/{submissionId}/grades
-   * Get grade for a submission
+   * GET /api/v1/submissions/download/{submissionId}
+   * Download submission file (with signed URL)
+   * MUST be before :submissionId route to match correctly
    */
-  @Get(':submissionId/grades')
+  @Get('download/:submissionId')
   @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
-  async getSubmissionGrade(
+  async downloadSubmission(
     @CurrentTenant() tenantId: string,
     @Param('submissionId') submissionId: string,
   ) {
     try {
-      const grade = await this.gradeRepository.findBySubmission(
+      const submission = await this.submissionManagementService.getSubmissionById(
         tenantId,
         submissionId,
       );
 
-      if (!grade) {
+      if (!submission.file_path) {
         return {
-          success: true,
-          data: null,
+          success: false,
+          error: {
+            code: 'NO_FILE',
+            message: 'Submission has no file',
+          },
         };
       }
+
+      // Generate signed URL for secure download
+      const signedUrl = this.s3Service.generateSignedUrl(
+        submission.file_path,
+        3600, // 1 hour expiration
+      );
 
       return {
         success: true,
         data: {
-          id: grade.id,
-          submission_id: grade.submission_id,
-          assignment_id: grade.assignment_id,
-          score: grade.final_score,
-          ai_score: grade.ai_score,
-          confidence: grade.confidence,
-          feedback: grade.feedback,
-          strengths: grade.strengths,
-          improvements: grade.improvements,
-          status: grade.status,
-          created_at: grade.created_at,
-          updated_at: grade.updated_at,
+          file_name: submission.file_path.split('/').pop(),
+          download_url: signedUrl,
+          expires_in: 3600,
         },
       };
     } catch (error) {
       return {
         success: false,
         error: {
-          code: 'GRADE_FETCH_FAILED',
+          code: 'DOWNLOAD_FAILED',
           message: error.message,
         },
       };
     }
+  }
+
+  /**
+   * GET /api/v1/submissions/stats/{assignmentId}
+   * Get submission statistics for an assignment
+   * MUST be before :submissionId route to match correctly
+   */
+  @Get('stats/:assignmentId')
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getSubmissionStats(
+    @CurrentTenant() tenantId: string,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    const stats = await this.submissionManagementService.getSubmissionStats(
+      tenantId,
+      assignmentId,
+    );
+
+    return {
+      success: true,
+      data: stats,
+    };
+  }
+
+  /**
+   * GET /api/v1/submissions/assignment/{assignmentId}
+   * Get all submissions for an assignment (instructor view)
+   * MUST be before :submissionId route to match correctly
+   */
+  @Get('assignment/:assignmentId')
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getAssignmentSubmissions(
+    @CurrentTenant() tenantId: string,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    const submissions = await this.submissionManagementService.getAssignmentSubmissions(
+      tenantId,
+      assignmentId,
+    );
+
+    const stats = await this.submissionManagementService.getSubmissionStats(
+      tenantId,
+      assignmentId,
+    );
+
+    return {
+      success: true,
+      data: {
+        submissions: submissions.map(s => ({
+          id: s.id,
+          student_id: s.student_id,
+          version: s.version,
+          is_late: s.is_late,
+          submitted_at: s.submitted_at,
+          file_path: s.file_path,
+          file_type: s.file_type,
+        })),
+        stats: {
+          total: stats.total_submissions,
+          unique_students: stats.unique_students,
+          late: stats.late_submissions,
+          on_time: stats.on_time_submissions,
+        },
+      },
+    };
+  }
+
+  /**
+   * GET /api/v1/submissions/student/my-submissions
+   * Get all submissions for current student
+   * MUST be before :submissionId route to match correctly
+   */
+  @Get('student/my-submissions')
+  @Roles(UserRole.STUDENT)
+  @HttpCode(HttpStatus.OK)
+  async getMySubmissions(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+  ) {
+    const submissions = await this.submissionManagementService.getStudentSubmissions(
+      tenantId,
+      user.id,
+    );
+
+    return {
+      success: true,
+      data: {
+        submissions: submissions.map(s => ({
+          id: s.id,
+          assignment_id: s.assignment_id,
+          version: s.version,
+          is_late: s.is_late,
+          submitted_at: s.submitted_at,
+        })),
+        count: submissions.length,
+      },
+    };
+  }
+
+  /**
+   * GET /api/v1/submissions/history/{assignmentId}/{studentId}
+   * Get all submission versions (history)
+   * MUST be before :submissionId route to match correctly
+   */
+  @Get('history/:assignmentId/:studentId')
+  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getSubmissionHistory(
+    @CurrentTenant() tenantId: string,
+    @Param('assignmentId') assignmentId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    const submissions = await this.submissionManagementService.getSubmissionHistory(
+      tenantId,
+      assignmentId,
+      studentId,
+    );
+
+    return {
+      success: true,
+      data: {
+        submissions: submissions.map(s => ({
+          id: s.id,
+          version: s.version,
+          file_path: s.file_path,
+          file_type: s.file_type,
+          is_late: s.is_late,
+          is_incremental: s.is_incremental,
+          submitted_at: s.submitted_at,
+        })),
+        count: submissions.length,
+      },
+    };
+  }
+
+  /**
+   * GET /api/v1/submissions/assignments/{assignmentId}/history
+   * Get current user's submission history for an assignment
+   * MUST be before :submissionId route to match correctly
+   */
+  @Get('assignments/:assignmentId/history')
+  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getMySubmissionHistory(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    const submissions = await this.submissionManagementService.getSubmissionHistory(
+      tenantId,
+      assignmentId,
+      user.id,
+    );
+
+    return submissions.map(s => ({
+      id: s.id,
+      assignment_id: s.assignment_id,
+      student_id: s.student_id,
+      version: s.version,
+      file_path: s.file_path,
+      file_type: s.file_type,
+      content: s.content,
+      is_late: s.is_late,
+      is_incremental: s.is_incremental,
+      submitted_at: s.submitted_at,
+      created_at: s.created_at,
+    }));
   }
 
   /**
@@ -183,8 +353,62 @@ export class SubmissionsController {
   }
 
   /**
+   * GET /api/v1/submissions/{submissionId}/grades
+   * Get grade for a submission
+   * Generic routes MUST come after specific routes
+   */
+  @Get(':submissionId/grades')
+  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getSubmissionGrade(
+    @CurrentTenant() tenantId: string,
+    @Param('submissionId') submissionId: string,
+  ) {
+    try {
+      const grade = await this.gradeRepository.findBySubmission(
+        tenantId,
+        submissionId,
+      );
+
+      if (!grade) {
+        return {
+          success: true,
+          data: null,
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          id: grade.id,
+          submission_id: grade.submission_id,
+          assignment_id: grade.assignment_id,
+          score: grade.final_score,
+          ai_score: grade.ai_score,
+          confidence: grade.confidence,
+          feedback: grade.feedback,
+          strengths: grade.strengths,
+          improvements: grade.improvements,
+          status: grade.status,
+          created_at: grade.created_at,
+          updated_at: grade.updated_at,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'GRADE_FETCH_FAILED',
+          message: error.message,
+        },
+      };
+    }
+  }
+
+  /**
    * GET /api/v1/submissions/{submissionId}
    * Get submission details
+   * Generic routes MUST come after specific routes
    */
   @Get(':submissionId')
   @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
@@ -223,221 +447,5 @@ export class SubmissionsController {
         },
       };
     }
-  }
-
-  /**
-   * GET /api/v1/submissions/history/{assignmentId}/{studentId}
-   * Get all submission versions (history)
-   */
-  @Get('history/:assignmentId/:studentId')
-  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async getSubmissionHistory(
-    @CurrentTenant() tenantId: string,
-    @Param('assignmentId') assignmentId: string,
-    @Param('studentId') studentId: string,
-  ) {
-    const submissions = await this.submissionManagementService.getSubmissionHistory(
-      tenantId,
-      assignmentId,
-      studentId,
-    );
-
-    return {
-      success: true,
-      data: {
-        submissions: submissions.map(s => ({
-          id: s.id,
-          version: s.version,
-          file_path: s.file_path,
-          file_type: s.file_type,
-          is_late: s.is_late,
-          is_incremental: s.is_incremental,
-          submitted_at: s.submitted_at,
-        })),
-        count: submissions.length,
-      },
-    };
-  }
-
-  /**
-   * GET /api/v1/submissions/assignments/{assignmentId}/history
-   * Get current user's submission history for an assignment
-   */
-  @Get('assignments/:assignmentId/history')
-  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async getMySubmissionHistory(
-    @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
-    @Param('assignmentId') assignmentId: string,
-  ) {
-    const submissions = await this.submissionManagementService.getSubmissionHistory(
-      tenantId,
-      assignmentId,
-      user.id,
-    );
-
-    return submissions.map(s => ({
-      id: s.id,
-      assignment_id: s.assignment_id,
-      student_id: s.student_id,
-      version: s.version,
-      file_path: s.file_path,
-      file_type: s.file_type,
-      content: s.content,
-      is_late: s.is_late,
-      is_incremental: s.is_incremental,
-      submitted_at: s.submitted_at,
-      created_at: s.created_at,
-    }));
-  }
-
-  /**
-   * GET /api/v1/submissions/student/my-submissions
-   * Get all submissions for current student
-   */
-  @Get('student/my-submissions')
-  @Roles(UserRole.STUDENT)
-  @HttpCode(HttpStatus.OK)
-  async getMySubmissions(
-    @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
-  ) {
-    const submissions = await this.submissionManagementService.getStudentSubmissions(
-      tenantId,
-      user.id,
-    );
-
-    return {
-      success: true,
-      data: {
-        submissions: submissions.map(s => ({
-          id: s.id,
-          assignment_id: s.assignment_id,
-          version: s.version,
-          is_late: s.is_late,
-          submitted_at: s.submitted_at,
-        })),
-        count: submissions.length,
-      },
-    };
-  }
-
-  /**
-   * GET /api/v1/submissions/assignment/{assignmentId}
-   * Get all submissions for an assignment (instructor view)
-   */
-  @Get('assignment/:assignmentId')
-  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async getAssignmentSubmissions(
-    @CurrentTenant() tenantId: string,
-    @Param('assignmentId') assignmentId: string,
-  ) {
-    const submissions = await this.submissionManagementService.getAssignmentSubmissions(
-      tenantId,
-      assignmentId,
-    );
-
-    const stats = await this.submissionManagementService.getSubmissionStats(
-      tenantId,
-      assignmentId,
-    );
-
-    return {
-      success: true,
-      data: {
-        submissions: submissions.map(s => ({
-          id: s.id,
-          student_id: s.student_id,
-          version: s.version,
-          is_late: s.is_late,
-          submitted_at: s.submitted_at,
-          file_path: s.file_path,
-          file_type: s.file_type,
-        })),
-        stats: {
-          total: stats.total_submissions,
-          unique_students: stats.unique_students,
-          late: stats.late_submissions,
-          on_time: stats.on_time_submissions,
-        },
-      },
-    };
-  }
-
-  /**
-   * GET /api/v1/submissions/download/{submissionId}
-   * Download submission file (with signed URL)
-   */
-  @Get('download/:submissionId')
-  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async downloadSubmission(
-    @CurrentTenant() tenantId: string,
-    @Param('submissionId') submissionId: string,
-  ) {
-    try {
-      const submission = await this.submissionManagementService.getSubmissionById(
-        tenantId,
-        submissionId,
-      );
-
-      if (!submission.file_path) {
-        return {
-          success: false,
-          error: {
-            code: 'NO_FILE',
-            message: 'Submission has no file',
-          },
-        };
-      }
-
-      // Generate signed URL for secure download
-      const signedUrl = this.s3Service.generateSignedUrl(
-        submission.file_path,
-        3600, // 1 hour expiration
-      );
-
-      return {
-        success: true,
-        data: {
-          file_name: submission.file_path.split('/').pop(),
-          download_url: signedUrl,
-          expires_in: 3600,
-        },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          code: 'DOWNLOAD_FAILED',
-          message: error.message,
-        },
-      };
-    }
-  }
-
-  /**
-   * GET /api/v1/submissions/stats/{assignmentId}
-   * Get submission statistics for an assignment
-   */
-  @Get('stats/:assignmentId')
-  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async getSubmissionStats(
-    @CurrentTenant() tenantId: string,
-    @Param('assignmentId') assignmentId: string,
-  ) {
-    const stats = await this.submissionManagementService.getSubmissionStats(
-      tenantId,
-      assignmentId,
-    );
-
-    return {
-      success: true,
-      data: stats,
-    };
   }
 }
