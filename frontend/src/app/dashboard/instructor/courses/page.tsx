@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
 import { Card, LoadingSpinner } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
@@ -10,27 +11,32 @@ interface Course {
   code: string
   title: string
   description: string
-  studentCount: number
-  assignmentCount: number
+  studentCount?: number
+  assignmentCount?: number
 }
 
 export default function InstructorCoursesPage() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const router = useRouter()
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
+
+  const handleLogout = async () => {
+    await logout()
+    router.replace('/auth/login')
+  }
 
   useEffect(() => {
     const fetchCourses = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/courses`,
+          `${process.env.NEXT_PUBLIC_API_URL}/v1/courses`,
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
             },
           }
         )
-
         if (response.ok) {
           const data = await response.json()
           setCourses(data.data || [])
@@ -41,7 +47,6 @@ export default function InstructorCoursesPage() {
         setLoading(false)
       }
     }
-
     if (user?.role === 'instructor') {
       fetchCourses()
     }
@@ -55,11 +60,18 @@ export default function InstructorCoursesPage() {
             <h1 className="text-3xl font-bold text-gray-900">My Courses</h1>
             <p className="text-gray-600 mt-2">Manage your courses and assignments</p>
           </div>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-            Create Course
-          </button>
+          <div className="flex gap-4">
+            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+              Create Course
+            </button>
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+            >
+              Logout
+            </button>
+          </div>
         </div>
-
         {loading ? (
           <Card>
             <LoadingSpinner message="Loading courses..." />
@@ -76,8 +88,8 @@ export default function InstructorCoursesPage() {
                   <h3 className="font-semibold text-gray-900">{course.title}</h3>
                   <p className="text-gray-600 text-sm">{course.description}</p>
                   <div className="flex gap-4 text-sm text-gray-600">
-                    <span>{course.studentCount} students</span>
-                    <span>{course.assignmentCount} assignments</span>
+                    {course.studentCount !== undefined && <span>{course.studentCount} students</span>}
+                    {course.assignmentCount !== undefined && <span>{course.assignmentCount} assignments</span>}
                   </div>
                   <button className="w-full mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
                     View Course

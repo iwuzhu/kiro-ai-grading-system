@@ -87,44 +87,66 @@ export class AuthController {
     @Body() credentials: LoginRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponse> {
+    console.log('\n=== LOGIN ATTEMPT ===');
+    console.log(`Email: ${credentials.email}`);
+    
     // Validate input
     if (!credentials.email || !credentials.password) {
+      console.log('❌ Missing credentials');
       throw new BadRequestException('Email and password are required');
     }
 
     // TODO: For MVP, we'll use a hardcoded institution ID for testing
     // In production, institution_id would be determined by email domain or subdomain
     const TEST_INSTITUTION_ID = '550e8400-e29b-41d4-a716-446655440000';
+    console.log(`Tenant ID: ${TEST_INSTITUTION_ID}`);
 
     try {
       // Find user by email - note: in a real system, we'd need to determine tenant_id from domain
       // For now, using test institution
+      console.log(`Finding user by email: ${credentials.email}`);
       const user = await this.userRepository.findByEmail(TEST_INSTITUTION_ID, credentials.email);
 
       if (!user) {
+        console.log(`❌ User NOT found in database`);
         throw new UnauthorizedException('Invalid email or password');
       }
 
+      console.log(`✓ User found: ID=${user.id}, Email=${user.email}, Status=${user.status}`);
+      console.log(`  Password hash exists: ${!!user.password_hash}`);
+      console.log(`  Password hash (first 20 chars): ${user.password_hash?.substring(0, 20)}`);
+
       if (user.status !== 'ACTIVE') {
+        console.log(`❌ User status is not ACTIVE: ${user.status}`);
         throw new UnauthorizedException('User account is not active');
       }
 
       // Verify password
+      console.log(`Comparing passwords...`);
+      console.log(`Provided password: ${credentials.password}`);
+      console.log(`Stored hash (first 20 chars): ${user.password_hash?.substring(0, 20)}`);
+      
       const passwordMatches = await bcrypt.compare(credentials.password, user.password_hash || '');
+      console.log(`Password match result: ${passwordMatches}`);
 
       if (!passwordMatches) {
+        console.log(`❌ Password mismatch`);
         throw new UnauthorizedException('Invalid email or password');
       }
+
+      console.log(`✓ Password verified successfully`);
 
       // Update last login timestamp (non-blocking - don't fail login if this errors)
       try {
         await this.userRepository.updateLastLogin(user.tenant_id, user.id);
+        console.log(`✓ Last login timestamp updated`);
       } catch (err) {
         // Log but don't throw - last login tracking is not critical for authentication
-        console.warn('Failed to update last login timestamp:', err.message);
+        console.warn('⚠️ Failed to update last login timestamp:', err.message);
       }
 
       // Generate token pair using JWT service
+      console.log(`Generating token pair...`);
       const response = this.jwtService.createTokenPair({
         id: user.id,
         email: user.email,
@@ -132,12 +154,18 @@ export class AuthController {
         role: user.role as UserRole,
         permissions: user.permissions || [],
       });
+      console.log(`✓ Token pair generated`);
 
       // Set refresh token in secure cookie
       res.cookie('refresh_token', response.refresh_token, REFRESH_COOKIE_OPTIONS);
+      console.log(`✓ Refresh token set in cookie`);
+      console.log(`✓ Login successful!\n`);
 
       return response;
     } catch (error) {
+      console.log(`❌ Login failed with error: ${error.message}`);
+      console.log(`Error type: ${error.constructor.name}\n`);
+      
       if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
         throw error;
       }

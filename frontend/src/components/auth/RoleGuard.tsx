@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { LoadingSpinner } from '@/components/common'
 
 interface RoleGuardProps {
   children: React.ReactNode
@@ -12,7 +13,12 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({
   roles, 
   fallback 
 }) => {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return <LoadingSpinner message="Verifying authentication..." />
+  }
 
   if (!user) {
     return <>{fallback || <div className="p-4 text-red-600">Not authenticated</div>}</>

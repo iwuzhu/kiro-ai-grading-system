@@ -1,32 +1,33 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import React, { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth, getRoleBasedPath } from '@/hooks/useAuth'
 import { LoadingSpinner, Card } from '@/components/common'
 import Link from 'next/link'
 
 export default function DashboardPage() {
+  const router = useRouter()
   const { user, isLoading } = useAuth()
-  const [redirected, setRedirected] = useState(false)
 
   useEffect(() => {
-    if (!isLoading && user) {
-      // Redirect to role-specific dashboard
-      if (user.role === 'admin') {
-        window.location.href = '/dashboard/admin/logs'
-      } else if (user.role === 'instructor') {
-        window.location.href = '/dashboard/instructor/courses'
-      } else {
-        window.location.href = '/dashboard/student/courses'
-      }
-      setRedirected(true)
+    // Only redirect if we've finished loading AND user exists AND has valid role
+    if (!isLoading && user && user.role) {
+      console.log(`[Dashboard] User loaded: ${user.email}, role: ${user.role}`)
+      
+      const contentPath = getRoleBasedPath(user.role)
+      console.log(`[Dashboard] Redirecting to: ${contentPath}`)
+      
+      router.replace(contentPath)
+    } else {
+      console.log(`[Dashboard] Loading state: isLoading=${isLoading}, user=${!!user}, role=${user?.role}`)
     }
-  }, [user, isLoading])
+  }, [user, isLoading, router])
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner message="Loading dashboard..." />
+        <LoadingSpinner message="Loading..." />
       </div>
     )
   }
@@ -54,13 +55,10 @@ export default function DashboardPage() {
     )
   }
 
-  if (redirected) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner message="Redirecting..." />
-      </div>
-    )
-  }
-
-  return null
+  // If we get here with user but still loading redirect, show loading
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <LoadingSpinner message="Redirecting to your dashboard..." />
+    </div>
+  )
 }

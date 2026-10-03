@@ -1,19 +1,25 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { useRouter } from 'next/navigation'
+import { useAuth, getRoleBasedPath } from '@/hooks/useAuth'
 import { LoadingSpinner } from '@/components/common'
 import Link from 'next/link'
 
 export default function HomePage() {
-  const { user, isLoading, isAuthenticated } = useAuth()
+  const router = useRouter()
+  const { isLoading, isAuthenticated, user } = useAuth()
 
   useEffect(() => {
-    // Redirect authenticated users to dashboard
-    if (isAuthenticated && !isLoading) {
-      window.location.href = '/dashboard'
+    // Redirect authenticated users to their role-specific dashboard (content page)
+    if (!isLoading && isAuthenticated && user && user.role) {
+      console.log(`[HomePage] User authenticated: ${user.email} (${user.role})`)
+      
+      const dashboardPath = getRoleBasedPath(user.role)
+      console.log(`[HomePage] Redirecting to ${dashboardPath}`)
+      router.replace(dashboardPath)
     }
-  }, [isAuthenticated, isLoading])
+  }, [isAuthenticated, isLoading, user, router])
 
   if (isLoading) {
     return (

@@ -4,49 +4,18 @@ import { useState } from 'react'
 import Link from 'next/link'
 
 export default function SignupPage() {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    name: '',
-  })
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
-  }
+  const [message, setMessage] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setIsLoading(true)
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/auth/signup`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(formData),
-        }
-      )
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error?.message || 'Signup failed')
-      }
-
-      window.location.href = '/auth/login?message=signup-success'
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Signup failed')
-    } finally {
-      setIsLoading(false)
-    }
+    setMessage('')
+    
+    // For now, just show a message - signup functionality would be implemented later
+    setMessage('Signup functionality coming soon. Please contact your administrator.')
   }
 
   return (
@@ -62,31 +31,21 @@ export default function SignupPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Name
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Your Name"
-            />
+        {message && (
+          <div className="bg-blue-50 text-blue-700 p-3 rounded-lg mb-4">
+            {message}
           </div>
+        )}
 
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Email
             </label>
             <input
               type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="your@email.com"
@@ -99,10 +58,10 @@ export default function SignupPage() {
             </label>
             <input
               type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="new-password"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
             />
@@ -110,10 +69,9 @@ export default function SignupPage() {
 
           <button
             type="submit"
-            disabled={isLoading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
           >
-            {isLoading ? 'Signing up...' : 'Sign Up'}
+            Sign Up
           </button>
         </form>
 
@@ -121,7 +79,7 @@ export default function SignupPage() {
           <p className="text-gray-600">
             Already have an account?{' '}
             <Link href="/auth/login" className="text-blue-600 hover:underline">
-              Login
+              Log in
             </Link>
           </p>
         </div>

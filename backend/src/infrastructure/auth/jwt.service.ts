@@ -38,15 +38,14 @@ export class JwtTokenService {
    * - tenant_id: institution UUID
    * - role: user role
    * - permissions: array of granular permissions
-   * - iat: issued at timestamp
-   * - exp: expiration timestamp (current time + 1 hour)
+   * - iat: issued at timestamp (added by JWT library)
+   * - exp: expiration timestamp (added by JWT library, current time + 1 hour)
+   * - type: access token type
    */
   generateAccessToken(payload: JwtPayload): string {
-    const claims: TokenClaims = {
+    const claims = {
       ...payload,
-      type: 'access',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + this.ACCESS_TOKEN_EXPIRATION,
+      type: 'access' as const,
     };
 
     return this.jwtService.sign(claims, {
@@ -66,19 +65,17 @@ export class JwtTokenService {
    * - sub: user ID
    * - tenant_id: institution UUID
    * - type: 'refresh'
-   * - iat: issued at timestamp
-   * - exp: expiration timestamp (current time + 30 days)
+   * - iat: issued at timestamp (added by JWT library)
+   * - exp: expiration timestamp (added by JWT library, current time + 30 days)
    */
   generateRefreshToken(userId: string, tenantId: string): string {
-    const claims: TokenClaims = {
+    const claims = {
       sub: userId,
       email: '', // Not included in refresh token
       tenant_id: tenantId,
       role: UserRole.STUDENT, // Placeholder, verified during refresh
       permissions: [],
-      type: 'refresh',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + this.REFRESH_TOKEN_EXPIRATION,
+      type: 'refresh' as const,
     };
 
     return this.jwtService.sign(claims, {

@@ -1,6 +1,10 @@
 # Logs
 logs
 *.log
+
+# Exception: Include admin logs page
+!frontend/src/app/dashboard/admin/logs/
+!frontend/src/app/dashboard/admin/logs/page.tsx
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -148,3 +152,11 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Terraform
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+

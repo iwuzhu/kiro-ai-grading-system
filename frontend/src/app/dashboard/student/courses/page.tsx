@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
 import { Card, LoadingSpinner } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
@@ -9,28 +10,33 @@ interface EnrolledCourse {
   id: string
   code: string
   title: string
-  instructor: string
+  instructor?: string
   grade?: number
-  completionPercentage: number
+  completionPercentage?: number
 }
 
 export default function StudentCoursesPage() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const router = useRouter()
   const [courses, setCourses] = useState<EnrolledCourse[]>([])
   const [loading, setLoading] = useState(true)
+
+  const handleLogout = async () => {
+    await logout()
+    router.replace('/auth/login')
+  }
 
   useEffect(() => {
     const fetchCourses = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/courses`,
+          `${process.env.NEXT_PUBLIC_API_URL}/v1/courses`,
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
             },
           }
         )
-
         if (response.ok) {
           const data = await response.json()
           setCourses(data.data || [])
@@ -41,7 +47,6 @@ export default function StudentCoursesPage() {
         setLoading(false)
       }
     }
-
     if (user?.role === 'student') {
       fetchCourses()
     }
@@ -50,11 +55,18 @@ export default function StudentCoursesPage() {
   return (
     <RoleGuard roles={['student']}>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">My Courses</h1>
-          <p className="text-gray-600 mt-2">View your enrolled courses and assignments</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">My Courses</h1>
+            <p className="text-gray-600 mt-2">View your enrolled courses and assignments</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+          >
+            Logout
+          </button>
         </div>
-
         {loading ? (
           <Card>
             <LoadingSpinner message="Loading courses..." />
@@ -69,15 +81,17 @@ export default function StudentCoursesPage() {
               <Card key={course.id} title={course.code}>
                 <div className="space-y-3">
                   <h3 className="font-semibold text-gray-900">{course.title}</h3>
-                  <p className="text-sm text-gray-600">Instructor: {course.instructor}</p>
+                  {course.instructor && (
+                    <p className="text-sm text-gray-600">Instructor: {course.instructor}</p>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Progress</span>
-                    <span className="font-semibold">{course.completionPercentage}%</span>
+                    <span className="font-semibold">{course.completionPercentage || 0}%</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-blue-600 h-2 rounded-full"
-                      style={{ width: `${course.completionPercentage}%` }}
+                      style={{ width: `${course.completionPercentage || 0}%` }}
                     />
                   </div>
                   {course.grade && (
