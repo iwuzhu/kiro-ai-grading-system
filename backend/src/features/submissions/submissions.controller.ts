@@ -223,6 +223,39 @@ export class SubmissionsController {
   }
 
   /**
+   * GET /api/v1/submissions/assignments/{assignmentId}/history
+   * Get current user's submission history for an assignment
+   */
+  @Get('assignments/:assignmentId/history')
+  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getMySubmissionHistory(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    const submissions = await this.submissionManagementService.getSubmissionHistory(
+      tenantId,
+      assignmentId,
+      user.id,
+    );
+
+    return submissions.map(s => ({
+      id: s.id,
+      assignment_id: s.assignment_id,
+      student_id: s.student_id,
+      version: s.version,
+      file_path: s.file_path,
+      file_type: s.file_type,
+      content: s.content,
+      is_late: s.is_late,
+      is_incremental: s.is_incremental,
+      submitted_at: s.submitted_at,
+      created_at: s.created_at,
+    }));
+  }
+
+  /**
    * GET /api/v1/submissions/student/my-submissions
    * Get all submissions for current student
    */
