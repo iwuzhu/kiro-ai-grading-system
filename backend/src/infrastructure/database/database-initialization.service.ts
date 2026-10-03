@@ -143,10 +143,15 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
         if (!institution) {
           throw error;
         }
-        this.logger.log(`✓ Institution "Test University" already exists`);
+        this.logger.log(`✓ Institution "Test University" already exists (found after creation attempt)`);
       }
     } else {
       this.logger.log(`✓ Institution "Test University" already exists`);
+    }
+
+    // Ensure institution was found/created
+    if (!institution) {
+      throw new Error('Test institution could not be created or found');
     }
 
     // Test users configuration

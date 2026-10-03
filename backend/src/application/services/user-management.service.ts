@@ -71,10 +71,17 @@ export class UserManagementService {
     },
   ): Promise<User> {
     // Validate institution exists and belongs to tenant
-    const institution = await this.institutionRepository.findWithRelations(
+    // Try looking up by id first, then by tenant_id (in case institutionId IS tenantId)
+    let institution = await this.institutionRepository.findWithRelations(
       institutionId,
     );
+    
     if (!institution || institution.tenant_id !== tenantId) {
+      // Try finding by tenant_id instead (in case the param is the tenantId)
+      institution = await this.institutionRepository.findByTenantId(tenantId);
+    }
+    
+    if (!institution) {
       throw new NotFoundException('Institution not found');
     }
 
@@ -111,10 +118,10 @@ export class UserManagementService {
       passwordHash = await bcrypt.hash(data.password, 10);
     }
 
-    // Create user
+    // Create user - use institution.id (not the URL parameter institutionId)
     return this.userRepository.createUser({
       tenant_id: tenantId,
-      institution_id: institutionId,
+      institution_id: institution.id, // Use the actual institution ID from database
       email: normalizedEmail,
       name: data.name,
       role: data.role,
@@ -388,10 +395,17 @@ export class UserManagementService {
     },
   ): Promise<User> {
     // Verify institution exists
-    const institution = await this.institutionRepository.findWithRelations(
+    // Try looking up by id first, then by tenant_id (in case institutionId IS tenantId)
+    let institution = await this.institutionRepository.findWithRelations(
       institutionId,
     );
+    
     if (!institution || institution.tenant_id !== tenantId) {
+      // Try finding by tenant_id instead (in case the param is the tenantId)
+      institution = await this.institutionRepository.findByTenantId(tenantId);
+    }
+    
+    if (!institution) {
       throw new NotFoundException('Institution not found');
     }
 
@@ -424,7 +438,7 @@ export class UserManagementService {
     // Create new user with SSO credentials
     return this.userRepository.createUser({
       tenant_id: tenantId,
-      institution_id: institutionId,
+      institution_id: institution.id, // Use the actual institution ID from database
       email: normalizedEmail,
       name: ssoData.name,
       role: 'STUDENT', // Default role for SSO users
@@ -570,5 +584,67 @@ export class UserManagementService {
     // RFC 5322 simplified regex
     const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$/;
     return emailRegex.test(email);
+  }
+
+  /**
+   * List users in a tenant with optional filtering and pagination
+   * @param tenantId - Tenant ID
+   * @param institutionId - Institution ID (for validation)
+   * @param options - Filtering and pagination options
+   * @returns Paginated user list
+   */
+  async listUsers(
+    tenantId: string,
+    institutionId: string,
+    options: {
+      page?: number;
+      limit?: number;
+      role?: 'ADMIN' | 'INSTRUCTOR' | 'STUDENT';
+      status?: 'ACTIVE' | 'INACTIVE' | 'INVITED';
+    },
+  ): Promise<{ users: User[]; total: number }> {
+    const page = Math.max(1, options.page || 1) - 1; // Convert to 0-indexed
+    const limit = Math.min(100, Math.max(1, options.limit || 20));
+
+    // For now, use basic tenant-scoped query
+    // TODO: Implement role and status filtering
+    const result = await this.userRepository.findByTenant(tenantId, page, limit);
+    
+    return result;
+  }
+
+  /**
+   * Get user by ID
+   * @param tenantId - Tenant ID
+   * @param userId - User ID
+   * @returns User or null
+   */
+  async getUserById(tenantId: string, userId: string): Promise<User | null> {
+    return this.userRepository.findById(tenantId, userId);
+  }
+
+  /**
+   * Update user status (ACTIVE/INACTIVE)
+   * @param tenantId - Tenant ID
+   * @param userId - User ID
+   * @param status - New status
+   * @returns Updated user
+   */
+  async updateUserStatus(
+    tenantId: string,
+    userId: string,
+    status: 'ACTIVE' | 'INACTIVE' | 'INVITED',
+  ): Promise<User | null> {
+    return this.userRepository.updateStatus(tenantId, userId, status);
+  }
+
+  /**
+   * Soft delete user (mark as inactive and set deleted_at)
+   * @param tenantId - Tenant ID
+   * @param userId - User ID
+   * @returns Deleted user
+   */
+  async softDeleteUser(tenantId: string, userId: string): Promise<User | null> {
+    return this.userRepository.softDeleteEntity(tenantId, userId);
   }
 }

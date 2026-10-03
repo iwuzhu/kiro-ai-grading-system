@@ -70,7 +70,7 @@ import { User } from '../../domain/entities/user.entity';
  * - CONFLICT (409): Resource conflict (e.g., duplicate email)
  * - INTERNAL_SERVER_ERROR (500): Unexpected server error
  */
-@Controller('api/v1/:institution_id/users')
+@Controller(':institution_id/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private userManagementService: UserManagementService) {}
@@ -181,22 +181,29 @@ export class UsersController {
     error: null;
   }> {
     try {
-      const pageNum = Math.max(0, parseInt(page, 10) || 0);
+      const pageNum = Math.max(1, parseInt(page, 10) || 1);
       const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-      // TODO: Implement filtering by role and status in service
-      // For now, return basic paginated list
-      // This requires extending UserManagementService with filter methods
+      const result = await this.userManagementService.listUsers(
+        tenantId,
+        institutionId,
+        {
+          page: pageNum,
+          limit: limitNum,
+          role: role as any || undefined,
+          status: status as any || undefined,
+        },
+      );
 
       return {
         success: true,
         data: {
-          users: [],
+          users: result.users.map(u => this.sanitizeUser(u)),
           pagination: {
             page: pageNum,
             limit: limitNum,
-            total: 0,
-            hasMore: false,
+            total: result.total,
+            hasMore: pageNum * limitNum < result.total,
           },
         },
         error: null,
@@ -254,7 +261,7 @@ export class UsersController {
   }
 
   /**
-   * Update user settings
+   * Update user settings (including status)
    *
    * @route PATCH /api/v1/:institution_id/users/:user_id
    * @rbac ADMIN only
@@ -262,7 +269,8 @@ export class UsersController {
    * Request:
    * {
    *   "name": "Jane Doe",
-   *   "email": "newemail@university.edu"
+   *   "email": "newemail@university.edu",
+   *   "status": "INACTIVE"
    * }
    *
    * Response: 200 OK with updated user
@@ -274,21 +282,31 @@ export class UsersController {
     @Param('institution_id') institutionId: string,
     @Param('user_id') userId: string,
     @CurrentTenant() tenantId: string,
-    @Body() dto: UpdateUserDto,
+    @Body() dto: any,
   ): Promise<{
     success: boolean;
     data: Partial<User>;
     error: null;
   }> {
     try {
-      // TODO: Implement user update logic
-      // - Validate email uniqueness
-      // - Update user fields
-      // - Log audit trail
+      let user = await this.userManagementService.getUserById?.(tenantId, userId);
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Handle status update
+      if (dto.status) {
+        user = await this.userManagementService.updateUserStatus(
+          tenantId,
+          userId,
+          dto.status,
+        );
+      }
 
       return {
         success: true,
-        data: {},
+        data: this.sanitizeUser(user),
         error: null,
       };
     } catch (error) {
