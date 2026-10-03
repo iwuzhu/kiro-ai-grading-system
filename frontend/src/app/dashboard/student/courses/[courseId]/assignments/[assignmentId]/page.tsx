@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
-import { Card, LoadingSpinner, Modal, RubricDisplay } from '@/components/common'
+import { Card, LoadingSpinner, Modal, RubricDisplay, SubmissionModal, SubmissionData } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
+import { useSubmission } from '@/hooks/useSubmission'
+import { useAssignmentSubmissions } from '@/hooks/useAssignmentSubmissions'
 
 interface Assignment {
   id: string
@@ -47,6 +49,11 @@ export default function StudentAssignmentDetailPage() {
   const [rubricLoading, setRubricLoading] = useState(false)
   const [rubricError, setRubricError] = useState<string | null>(null)
 
+  // Submission modal state
+  const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false)
+  const { loading: submitting, error: submissionError, submitAssignment } = useSubmission()
+  const { submissions, loading: submissionsLoading, error: submissionsError, refetch: refetchSubmissions } = useAssignmentSubmissions(assignmentId)
+
   const handleLogout = async () => {
     await logout()
     router.replace('/auth/login')
@@ -83,6 +90,25 @@ export default function StudentAssignmentDetailPage() {
       setRubricError('Error loading rubric')
     } finally {
       setRubricLoading(false)
+    }
+  }
+
+  const handleOpenSubmissionModal = () => {
+    if (!isOverdue(assignment?.hard_deadline)) {
+      setIsSubmissionModalOpen(true)
+    }
+  }
+
+  const handleSubmitAssignment = async (data: SubmissionData) => {
+    if (!assignment) return
+
+    try {
+      await submitAssignment(assignment.id, data)
+      // Refetch submissions to show the new one
+      await refetchSubmissions()
+    } catch (err) {
+      // Error is already handled in the hook and displayed in the modal
+      console.error('Submission error:', err)
     }
   }
 
@@ -316,7 +342,9 @@ export default function StudentAssignmentDetailPage() {
                     <p className="text-sm font-semibold text-gray-700 mb-1">
                       Submission Status
                     </p>
-                    <p className="text-gray-900">Not submitted</p>
+                    <p className="text-gray-900">
+                      {submissionsLoading ? 'Loading...' : submissions.length > 0 ? `${submissions.length} submission(s)` : 'Not submitted'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -329,6 +357,7 @@ export default function StudentAssignmentDetailPage() {
                 
                 <div className="flex flex-wrap gap-3">
                   <button
+                    onClick={handleOpenSubmissionModal}
                     disabled={isOverdue(assignment.hard_deadline)}
                     className={`px-4 py-2 rounded-lg transition text-white ${
                       isOverdue(assignment.hard_deadline)
@@ -397,6 +426,67 @@ export default function StudentAssignmentDetailPage() {
           error={rubricError || undefined}
         />
       </Modal>
+
+      {/* Submission Modal */}
+      <SubmissionModal
+        isOpen={isSubmissionModalOpen}
+        onClose={() => setIsSubmissionModalOpen(false)}
+        onSubmit={handleSubmitAssignment}
+        assignmentType={assignment?.type as any}
+        assignmentTitle={assignment?.title || 'Assignment'}
+        isLoading={submitting}
+        error={submissionError}
+      />
+
+      {/* Previous Submissions Section (for incremental assignments) */}
+      {assignment?.allow_incremental && submissions.length > 0 && (
+        <Card>
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900 mb-4">Previous Submissions</h3>
+            
+            {submissionsLoading ? (
+              <LoadingSpinner message="Loading submission history..." />
+            ) : submissionsError ? (
+              <p className="text-red-600 text-sm">{submissionsError}</p>
+            ) : (
+              <div className="space-y-3">
+                {submissions.map((submission, index) => (
+                  <div key={submission.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          Submission #{submission.version}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Submitted: {new Date(submission.submitted_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                        {submission.is_late && (
+                          <p className="text-sm text-red-600 mt-1">
+                            ⏰ Submitted after soft deadline (late penalty may apply)
+                          </p>
+                        )}
+                      </div>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                        submission.is_late
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {submission.is_late ? 'Late' : 'On Time'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
     </RoleGuard>
   )
 }
