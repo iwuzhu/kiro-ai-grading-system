@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
-import { Card, LoadingSpinner } from '@/components/common'
+import { Card, LoadingSpinner, Modal, RubricDisplay } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
 
 interface Assignment {
@@ -20,6 +20,16 @@ interface Assignment {
   rubric_id?: string
 }
 
+interface Rubric {
+  id: string
+  name: string
+  description?: string
+  criteria: any[]
+  is_template: boolean
+  created_at: string
+  updated_at: string
+}
+
 export default function AssignmentDetailPage() {
   const { user, logout } = useAuth()
   const router = useRouter()
@@ -30,10 +40,50 @@ export default function AssignmentDetailPage() {
   const [assignment, setAssignment] = useState<Assignment | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Rubric modal state
+  const [isRubricModalOpen, setIsRubricModalOpen] = useState(false)
+  const [rubric, setRubric] = useState<Rubric | null>(null)
+  const [rubricLoading, setRubricLoading] = useState(false)
+  const [rubricError, setRubricError] = useState<string | null>(null)
 
   const handleLogout = async () => {
     await logout()
     router.replace('/auth/login')
+  }
+
+  const handleViewRubric = async () => {
+    if (!assignment?.rubric_id) return
+
+    setIsRubricModalOpen(true)
+    setRubricLoading(true)
+    setRubricError(null)
+
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/v1/rubrics/${assignment.rubric_id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        setRubric(data.data)
+      } else if (response.status === 404) {
+        setRubricError('Rubric not found')
+      } else {
+        setRubricError('Failed to load rubric')
+      }
+    } catch (error) {
+      console.error('Error fetching rubric:', error)
+      setRubricError('Error loading rubric')
+    } finally {
+      setRubricLoading(false)
+    }
   }
 
   const handleBack = () => {
@@ -324,9 +374,19 @@ export default function AssignmentDetailPage() {
                     <p className="text-sm font-semibold text-gray-700 mb-1">
                       Rubric
                     </p>
-                    <p className="text-gray-900">
-                      {assignment.rubric_id ? 'Assigned' : 'Not assigned'}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-gray-900">
+                        {assignment.rubric_id ? 'Assigned' : 'Not assigned'}
+                      </p>
+                      {assignment.rubric_id && (
+                        <button
+                          onClick={handleViewRubric}
+                          className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                        >
+                          View Rubric
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -412,6 +472,19 @@ export default function AssignmentDetailPage() {
             </Card>
           </div>
         ) : null}
+
+        {/* Rubric Modal */}
+        <Modal
+          isOpen={isRubricModalOpen}
+          onClose={() => setIsRubricModalOpen(false)}
+          title={rubric?.name || 'Rubric'}
+        >
+          <RubricDisplay
+            rubric={rubric || {}}
+            isLoading={rubricLoading}
+            error={rubricError || undefined}
+          />
+        </Modal>
       </div>
     </RoleGuard>
   )

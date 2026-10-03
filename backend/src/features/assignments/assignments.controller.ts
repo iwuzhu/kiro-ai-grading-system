@@ -19,9 +19,11 @@ import { UserRole } from '../../infrastructure/auth/types';
 import { AssignmentManagementService } from '../../domain/services/assignment-management.service';
 import { RubricParserService } from '../../domain/services/rubric-parser.service';
 import { RubricSerializerService } from '../../domain/services/rubric-serializer.service';
+import { RubricRepository } from '../../domain/repositories/rubric.repository';
 import { CreateAssignmentDto } from './dtos/create-assignment.dto';
 import { UpdateAssignmentDto } from './dtos/update-assignment.dto';
 import { CreateRubricDto } from './dtos/create-rubric.dto';
+import { NotFoundException } from '../../common/exceptions/not-found.exception';
 
 /**
  * Assignments Controller
@@ -52,6 +54,8 @@ export class AssignmentsController {
     private readonly rubricParser: RubricParserService,
     @Inject(RubricSerializerService)
     private readonly rubricSerializer: RubricSerializerService,
+    @Inject(RubricRepository)
+    private readonly rubricRepository: RubricRepository,
   ) {}
 
   /**
@@ -352,12 +356,15 @@ export class AssignmentsController {
     @CurrentTenant() tenantId: string,
   ) {
     try {
-      // TODO: Get rubric via RubricRepository
-      // const rubric = await this.rubricRepository.findById(tenantId, rubricId);
+      const rubric = await this.rubricRepository.findById(tenantId, rubricId);
+      
+      if (!rubric) {
+        throw new NotFoundException('Rubric', rubricId);
+      }
 
       return {
         success: true,
-        data: { message: 'Rubric retrieved' },
+        data: rubric,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -373,12 +380,11 @@ export class AssignmentsController {
   @Get('rubrics')
   async getRubrics(@CurrentTenant() tenantId: string) {
     try {
-      // TODO: Get rubrics via RubricRepository
-      // const rubrics = await this.rubricRepository.findByTenant(tenantId);
+      const rubrics = await this.rubricRepository.findByTenant(tenantId);
 
       return {
         success: true,
-        data: [],
+        data: rubrics,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
