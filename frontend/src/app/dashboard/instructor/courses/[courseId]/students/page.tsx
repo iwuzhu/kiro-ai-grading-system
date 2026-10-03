@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth'
 interface User {
   id: string
   email: string
-  full_name?: string
+  name?: string
 }
 
 interface CourseEnrollment {
@@ -23,7 +23,7 @@ interface CourseEnrollment {
 interface Student {
   id: string
   email: string
-  full_name?: string
+  name?: string
   status?: string
   enrolled_at?: string
 }
@@ -107,7 +107,7 @@ export default function EnrolledStudentsPage() {
           const mappedStudents: Student[] = enrollmentData.map((enrollment: CourseEnrollment) => ({
             id: enrollment.user?.id || enrollment.id,
             email: enrollment.user?.email || 'N/A',
-            full_name: enrollment.user?.full_name,
+            name: enrollment.user?.name,
             status: 'ACTIVE', // All returned enrollments are active (unenrolled_at is null)
             enrolled_at: enrollment.enrolled_at,
           }))
@@ -195,7 +195,7 @@ export default function EnrolledStudentsPage() {
                   {students.map((student) => (
                     <tr key={student.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {student.full_name || 'N/A'}
+                        {student.name || 'N/A'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {student.email}
