@@ -62,7 +62,7 @@ export default function AssignmentDetailPage() {
     try {
       const token = localStorage.getItem('accessToken')
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/v1/rubrics/${assignment.rubric_id}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/v1/courses/rubrics/${assignment.rubric_id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
