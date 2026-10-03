@@ -18,6 +18,7 @@ import { AuthModule } from './infrastructure/auth/auth.module';
 // Feature modules
 import { AuditLogsModule } from './features/audit-logs/audit-logs.module';
 import { UsersModule } from './features/users/users.module';
+import { InstitutionsModule } from './features/institutions/institutions.module';
 
 // Common (filters, guards, interceptors)
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -40,6 +41,7 @@ import { APP_FILTER } from '@nestjs/core';
     // Features
     AuditLogsModule,
     UsersModule,
+    InstitutionsModule,
   ],
   providers: [
     {
