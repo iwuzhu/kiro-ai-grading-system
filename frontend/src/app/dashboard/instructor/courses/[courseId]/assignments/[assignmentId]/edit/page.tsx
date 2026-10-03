@@ -163,7 +163,7 @@ export default function EditAssignmentPage() {
       )
 
       if (response.ok) {
-        const data = await response.json()
+        await response.json()
         setSuccessMessage('Assignment updated successfully')
         
         // Redirect back to detail page after 1.5 seconds

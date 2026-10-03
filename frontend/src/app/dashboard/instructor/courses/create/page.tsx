@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
-import { Card, LoadingSpinner } from '@/components/common'
+import { Card } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
 
 interface CreateCourseForm {

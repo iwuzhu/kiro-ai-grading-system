@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
-import { Card, LoadingSpinner, Modal, RubricDisplay, SubmissionModal, SubmissionData } from '@/components/common'
+import { Card, LoadingSpinner, Modal, RubricDisplay, SubmissionModal, SubmissionData, PreviousSubmissionsModal } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubmission } from '@/hooks/useSubmission'
 import { useAssignmentSubmissions } from '@/hooks/useAssignmentSubmissions'
@@ -36,7 +36,6 @@ export default function StudentAssignmentDetailPage() {
   const { user, logout } = useAuth()
   const router = useRouter()
   const params = useParams()
-  const courseId = params.courseId as string
   const assignmentId = params.assignmentId as string
   
   const [assignment, setAssignment] = useState<Assignment | null>(null)
@@ -53,6 +52,9 @@ export default function StudentAssignmentDetailPage() {
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false)
   const { loading: submitting, error: submissionError, submitAssignment } = useSubmission()
   const { submissions, loading: submissionsLoading, error: submissionsError, refetch: refetchSubmissions } = useAssignmentSubmissions(assignmentId)
+
+  // Previous submissions modal state
+  const [isPreviousSubmissionsModalOpen, setIsPreviousSubmissionsModalOpen] = useState(false)
 
   const handleLogout = async () => {
     await logout()
@@ -110,6 +112,10 @@ export default function StudentAssignmentDetailPage() {
       // Error is already handled in the hook and displayed in the modal
       console.error('Submission error:', err)
     }
+  }
+
+  const handleOpenPreviousSubmissionsModal = () => {
+    setIsPreviousSubmissionsModalOpen(true)
   }
 
   const handleBack = () => {
@@ -380,7 +386,10 @@ export default function StudentAssignmentDetailPage() {
                   )}
 
                   {assignment.allow_incremental && (
-                    <button className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">
+                    <button
+                      onClick={handleOpenPreviousSubmissionsModal}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition"
+                    >
                       View Previous Submissions
                     </button>
                   )}
@@ -421,7 +430,7 @@ export default function StudentAssignmentDetailPage() {
         title={rubric?.name || 'Rubric'}
       >
         <RubricDisplay
-          rubric={rubric || {}}
+          rubric={rubric as any}
           isLoading={rubricLoading}
           error={rubricError || undefined}
         />
@@ -438,6 +447,16 @@ export default function StudentAssignmentDetailPage() {
         error={submissionError}
       />
 
+      {/* Previous Submissions Modal */}
+      <PreviousSubmissionsModal
+        isOpen={isPreviousSubmissionsModalOpen}
+        onClose={() => setIsPreviousSubmissionsModalOpen(false)}
+        submissions={submissions}
+        loading={submissionsLoading}
+        error={submissionsError}
+        assignmentTitle={assignment?.title || 'Assignment'}
+      />
+
       {/* Previous Submissions Section (for incremental assignments) */}
       {assignment?.allow_incremental && submissions.length > 0 && (
         <Card>
@@ -450,7 +469,7 @@ export default function StudentAssignmentDetailPage() {
               <p className="text-red-600 text-sm">{submissionsError}</p>
             ) : (
               <div className="space-y-3">
-                {submissions.map((submission, index) => (
+                {submissions.map((submission) => (
                   <div key={submission.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                     <div className="flex justify-between items-start">
                       <div>

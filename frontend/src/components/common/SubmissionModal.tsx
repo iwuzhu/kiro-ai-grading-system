@@ -85,9 +85,9 @@ export const SubmissionModal: React.FC<SubmissionModalProps> = ({
       const submissionData: SubmissionData = isTextBased
         ? { content: content.trim() }
         : {
-            fileName,
+            fileName: fileName || undefined,
             fileType: fileName?.split('.').pop() || 'txt',
-            filePath: fileContent, // In production, would be S3 path
+            filePath: fileContent || undefined,
           }
 
       // Call parent submit handler

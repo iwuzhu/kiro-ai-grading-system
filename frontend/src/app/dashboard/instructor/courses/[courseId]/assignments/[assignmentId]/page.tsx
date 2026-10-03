@@ -480,7 +480,7 @@ export default function AssignmentDetailPage() {
           title={rubric?.name || 'Rubric'}
         >
           <RubricDisplay
-            rubric={rubric || {}}
+            rubric={rubric as any}
             isLoading={rubricLoading}
             error={rubricError || undefined}
           />
