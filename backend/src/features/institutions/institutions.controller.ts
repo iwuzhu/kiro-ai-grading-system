@@ -63,7 +63,7 @@ import { Institution } from '../../domain/entities/institution.entity';
  * - NOT_FOUND (404): Institution not found
  * - INTERNAL_SERVER_ERROR (500): Unexpected server error
  */
-@Controller('api/v1/:institution_id/settings')
+@Controller('api/v1/settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class InstitutionsController {
   constructor(private institutionManagementService: InstitutionManagementService) {}
@@ -101,7 +101,6 @@ export class InstitutionsController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async getSettings(
-    @Param('institution_id') institutionId: string,
     @CurrentTenant() tenantId: string,
   ): Promise<{
     success: boolean;
@@ -155,7 +154,6 @@ export class InstitutionsController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async updateSettings(
-    @Param('institution_id') institutionId: string,
     @CurrentTenant() tenantId: string,
     @Body() dto: UpdateInstitutionSettingsDto,
   ): Promise<{
@@ -246,7 +244,6 @@ export class InstitutionsController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async setPlagiarismThreshold(
-    @Param('institution_id') institutionId: string,
     @CurrentTenant() tenantId: string,
     @Body() dto: SetPlagiarismThresholdDto,
   ): Promise<{
@@ -309,7 +306,6 @@ export class InstitutionsController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async setGradeScale(
-    @Param('institution_id') institutionId: string,
     @CurrentTenant() tenantId: string,
     @Body() dto: SetGradeScaleDto,
   ): Promise<{
@@ -364,7 +360,6 @@ export class InstitutionsController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async setAIProvider(
-    @Param('institution_id') institutionId: string,
     @CurrentTenant() tenantId: string,
     @Body() dto: SetAIProviderDto,
   ): Promise<{
@@ -422,7 +417,6 @@ export class InstitutionsController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async getAnalytics(
-    @Param('institution_id') institutionId: string,
     @CurrentTenant() tenantId: string,
   ): Promise<{
     success: boolean;

@@ -360,10 +360,15 @@ export default function AdminLogsPage() {
   }
 
   const handleSaveSettings = async () => {
+    console.log('[DEBUG] handleSaveSettings clicked')
     try {
       setSettingsSaving(true)
       const token = localStorage.getItem('accessToken')
       const tenantId = localStorage.getItem('userTenant')
+
+      console.log('[DEBUG] Token:', token?.substring(0, 20) + '...')
+      console.log('[DEBUG] TenantId:', tenantId)
+      console.log('[DEBUG] Settings:', settings)
 
       if (!token || !tenantId) {
         setError('Not authenticated')
@@ -371,8 +376,10 @@ export default function AdminLogsPage() {
       }
 
       // Call backend to save settings using PATCH endpoint
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/v1/settings`
+      console.log('[DEBUG] Calling URL:', url)
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/v1/${tenantId}/settings`,
+        url,
         {
           method: 'PATCH',
           headers: {
@@ -388,6 +395,9 @@ export default function AdminLogsPage() {
         },
       )
 
+      console.log('[DEBUG] Response status:', response.status)
+      console.log('[DEBUG] Response:', response)
+
       if (response.status === 401) {
         // Token expired, try to refresh
         try {
@@ -395,7 +405,7 @@ export default function AdminLogsPage() {
           // Retry the request with new token
           const newToken = localStorage.getItem('accessToken')
           const retryResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/v1/${tenantId}/settings`,
+            `${process.env.NEXT_PUBLIC_API_URL}/v1/settings`,
             {
               method: 'PATCH',
               headers: {
