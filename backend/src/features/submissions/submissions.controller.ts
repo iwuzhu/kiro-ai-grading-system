@@ -15,6 +15,7 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { SubmissionManagementService } from '../../domain/services/submission-management.service';
 import { SubmissionRepository } from '../../domain/repositories/submission.repository';
+import { GradeRepository } from '../../domain/repositories/grade.repository';
 import { S3Service } from '../../infrastructure/storage/s3.service';
 import { UserRole } from '../../infrastructure/auth/types';
 
@@ -31,14 +32,67 @@ import { UserRole } from '../../infrastructure/auth/types';
  * ✓ 6: Student submission workflow
  * ✓ 14: Multi-format file support
  */
-@Controller('api/v1/submissions')
+@Controller('submissions')
 @UseGuards(AuthGuard('jwt'))
 export class SubmissionsController {
   constructor(
     private submissionManagementService: SubmissionManagementService,
     private submissionRepository: SubmissionRepository,
+    private gradeRepository: GradeRepository,
     private s3Service: S3Service,
   ) {}
+
+  /**
+   * GET /api/v1/submissions/{submissionId}/grades
+   * Get grade for a submission
+   */
+  @Get(':submissionId/grades')
+  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getSubmissionGrade(
+    @CurrentTenant() tenantId: string,
+    @Param('submissionId') submissionId: string,
+  ) {
+    try {
+      const grade = await this.gradeRepository.findBySubmission(
+        tenantId,
+        submissionId,
+      );
+
+      if (!grade) {
+        return {
+          success: true,
+          data: null,
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          id: grade.id,
+          submission_id: grade.submission_id,
+          assignment_id: grade.assignment_id,
+          score: grade.final_score,
+          ai_score: grade.ai_score,
+          confidence: grade.confidence,
+          feedback: grade.feedback,
+          strengths: grade.strengths,
+          improvements: grade.improvements,
+          status: grade.status,
+          created_at: grade.created_at,
+          updated_at: grade.updated_at,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'GRADE_FETCH_FAILED',
+          message: error.message,
+        },
+      };
+    }
+  }
 
   /**
    * POST /api/v1/submissions/assignments/{assignmentId}/submit
@@ -228,6 +282,8 @@ export class SubmissionsController {
           version: s.version,
           is_late: s.is_late,
           submitted_at: s.submitted_at,
+          file_path: s.file_path,
+          file_type: s.file_type,
         })),
         stats: {
           total: stats.total_submissions,

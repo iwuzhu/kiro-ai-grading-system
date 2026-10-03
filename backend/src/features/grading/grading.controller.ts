@@ -13,7 +13,6 @@ import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { GradingEngineService } from '../../domain/services/grading-engine.service';
 import { GradeOverrideService } from '../../domain/services/grade-override.service';
 import { GradeRepository } from '../../domain/repositories/grade.repository';
 import { UserRole } from '../../infrastructure/auth/types';
@@ -31,11 +30,10 @@ import { UserRole } from '../../infrastructure/auth/types';
  * ✓ 7: AI Grading operations
  * ✓ 13: Grade Override workflow
  */
-@Controller('api/v1/grading')
+@Controller('grading')
 @UseGuards(AuthGuard('jwt'))
 export class GradingController {
   constructor(
-    private gradingEngineService: GradingEngineService,
     private gradeOverrideService: GradeOverrideService,
     private gradeRepository: GradeRepository,
   ) {}
@@ -72,6 +70,45 @@ export class GradingController {
         ai_score: grade.ai_score,
         confidence: grade.confidence,
         final_score: grade.final_score,
+        feedback: grade.feedback,
+        strengths: grade.strengths,
+        improvements: grade.improvements,
+        status: grade.status,
+        created_at: grade.created_at,
+        updated_at: grade.updated_at,
+      },
+    };
+  }
+
+  /**
+   * GET /api/v1/submissions/{submissionId}/grades
+   * Get grade for a submission
+   */
+  @Get('submission/:submissionId/grades')
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getSubmissionGrade(
+    @CurrentTenant() tenantId: string,
+    @Param('submissionId') submissionId: string,
+  ) {
+    const grade = await this.gradeRepository.findBySubmission(tenantId, submissionId);
+
+    if (!grade) {
+      return {
+        success: true,
+        data: null,
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        id: grade.id,
+        submission_id: grade.submission_id,
+        assignment_id: grade.assignment_id,
+        score: grade.final_score,
+        ai_score: grade.ai_score,
+        confidence: grade.confidence,
         feedback: grade.feedback,
         strengths: grade.strengths,
         improvements: grade.improvements,
@@ -160,22 +197,6 @@ export class GradingController {
   }
 
   /**
-   * GET /api/v1/grading/stats
-   * Get grading statistics
-   */
-  @Get('stats/all')
-  @Roles(UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async getGradingStats(@CurrentTenant() tenantId: string) {
-    const stats = await this.gradingEngineService.getGradingStats(tenantId);
-
-    return {
-      success: true,
-      data: stats,
-    };
-  }
-
-  /**
    * GET /api/v1/grading/{gradeId}/override
    * Get override for a grade (if exists)
    */
@@ -209,5 +230,169 @@ export class GradingController {
         approved_at: override.approved_at,
       },
     };
+  }
+
+  /**
+   * POST /api/v1/grading
+   * Create a new grade for a submission (manual grading)
+   *
+   * Property: Every Grade Must Have Explanation
+   * - Feedback: Required (min 20 chars)
+   * - Strengths: At least 1 required
+   * - Improvements: At least 1 required
+   *
+   * Property: Every Grade Must Have Confidence Score
+   * - For manual grades: instructor confidence (0-100)
+   * - Helps calibrate instructor reliability
+   */
+  @Post()
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async createGrade(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+    @Body()
+    body: {
+      submission_id: string;
+      assignment_id: string;
+      score: number;
+      confidence?: number; // Optional: instructor confidence (0-100)
+      feedback: string;
+      strengths: string[];
+      improvements: string[];
+    },
+  ) {
+    try {
+      // Validation: Required fields
+      if (!body.submission_id || !body.assignment_id) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'Missing required fields: submission_id, assignment_id',
+          },
+        };
+      }
+
+      // Validation: Score range (0-100)
+      if (body.score < 0 || body.score > 100) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_SCORE',
+            message: 'Score must be between 0 and 100',
+          },
+        };
+      }
+
+      // Validation: Feedback (min 20 chars)
+      if (!body.feedback || body.feedback.trim().length < 20) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_FEEDBACK',
+            message: 'Feedback must be at least 20 characters',
+          },
+        };
+      }
+
+      // Validation: At least one strength
+      if (!body.strengths || body.strengths.length === 0) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_STRENGTHS',
+            message: 'At least one strength must be provided',
+          },
+        };
+      }
+
+      // Validation: At least one improvement
+      if (!body.improvements || body.improvements.length === 0) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_IMPROVEMENTS',
+            message: 'At least one improvement must be provided',
+          },
+        };
+      }
+
+      // Validation: Confidence (if provided)
+      let instructorConfidence = body.confidence ?? 85; // Default to 85% if not provided
+      if (instructorConfidence < 0 || instructorConfidence > 100) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_CONFIDENCE',
+            message: 'Confidence must be between 0 and 100',
+          },
+        };
+      }
+
+      // Check if grade already exists for this submission
+      const existingGrade = await this.gradeRepository.findBySubmission(
+        tenantId,
+        body.submission_id,
+      );
+
+      let grade;
+
+      if (existingGrade) {
+        // Grade exists - update it
+        existingGrade.feedback = body.feedback;
+        existingGrade.strengths = body.strengths;
+        existingGrade.improvements = body.improvements;
+        existingGrade.final_score = body.score;
+        existingGrade.confidence = instructorConfidence;
+        existingGrade.status = 'MANUALLY_GRADED';
+        existingGrade.graded_by_user_id = user.id;
+        existingGrade.updated_at = new Date();
+
+        grade = await this.gradeRepository.save(existingGrade);
+      } else {
+        // Grade doesn't exist - create it
+        grade = await this.gradeRepository.createGrade({
+          tenant_id: tenantId,
+          submission_id: body.submission_id,
+          assignment_id: body.assignment_id,
+          feedback: body.feedback,
+          strengths: body.strengths,
+          improvements: body.improvements,
+          final_score: body.score,
+          // For manual grades: ai_score is null, confidence represents instructor confidence
+          ai_score: null,
+          confidence: instructorConfidence,
+          status: 'MANUALLY_GRADED',
+          graded_by_user_id: user.id,
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          id: grade.id,
+          submission_id: grade.submission_id,
+          assignment_id: grade.assignment_id,
+          score: grade.final_score,
+          confidence: grade.confidence,
+          feedback: grade.feedback,
+          strengths: grade.strengths,
+          improvements: grade.improvements,
+          status: grade.status,
+          graded_by_user_id: grade.graded_by_user_id,
+          created_at: grade.created_at,
+        },
+      };
+    } catch (error) {
+      console.error('Error creating grade:', error);
+      return {
+        success: false,
+        error: {
+          code: 'GRADE_CREATION_FAILED',
+          message: error.message || 'Failed to create grade',
+        },
+      };
+    }
   }
 }

@@ -42,7 +42,7 @@ import { CreateRubricDto } from './dtos/create-rubric.dto';
  * ✓ Rubric CRUD
  * ✓ All responses follow standard format
  */
-@Controller('api/v1/:institution_id')
+@Controller('courses')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class AssignmentsController {
   constructor(

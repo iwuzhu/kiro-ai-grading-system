@@ -245,13 +245,13 @@ export class S3Service {
    *
    * @param s3Path - S3 path to file
    * @param expiresIn - Expiration time in seconds (default: 1 hour)
-   * @returns Signed URL
+   * @returns Signed URL (direct S3 path for now, in production would be AWS pre-signed URL)
    */
   generateSignedUrl(s3Path: string, expiresIn: number = 3600): string {
     // In production, this would generate an AWS S3 pre-signed URL
-    // For now, return a local URL with expiration token
-    const token = Buffer.from(`${s3Path}:${Date.now() + expiresIn * 1000}`).toString('base64');
-    return `/api/v1/files/download?token=${token}`;
+    // For development, we return the S3 path which maps to local storage
+    // The backend will serve this via the files download endpoint
+    return s3Path;
   }
 
   /**

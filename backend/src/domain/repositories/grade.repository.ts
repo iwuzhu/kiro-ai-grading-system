@@ -179,6 +179,7 @@ export class GradeRepository extends Repository<Grade> {
     improvements?: string[];
     status?: string;
     graded_by_user_id?: string;
+    final_score?: number; // For manual grades
   }): Promise<Grade> {
     const grade = this.create({
       tenant_id: data.tenant_id,
@@ -186,7 +187,7 @@ export class GradeRepository extends Repository<Grade> {
       assignment_id: data.assignment_id,
       ai_score: data.ai_score ?? null,
       confidence: data.confidence ?? null,
-      final_score: data.ai_score ?? null,
+      final_score: data.final_score ?? data.ai_score ?? null,
       feedback: data.feedback || null,
       strengths: data.strengths || [],
       improvements: data.improvements || [],

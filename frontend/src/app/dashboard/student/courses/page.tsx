@@ -10,9 +10,9 @@ interface EnrolledCourse {
   id: string
   code: string
   title: string
-  instructor?: string
-  grade?: number
-  completionPercentage?: number
+  status?: string
+  semester_start?: string
+  created_at?: string
 }
 
 export default function StudentCoursesPage() {
@@ -24,6 +24,10 @@ export default function StudentCoursesPage() {
   const handleLogout = async () => {
     await logout()
     router.replace('/auth/login')
+  }
+
+  const handleViewCourse = (courseId: string) => {
+    router.push(`/dashboard/student/courses/${courseId}`)
   }
 
   useEffect(() => {
@@ -67,6 +71,7 @@ export default function StudentCoursesPage() {
             Logout
           </button>
         </div>
+
         {loading ? (
           <Card>
             <LoadingSpinner message="Loading courses..." />
@@ -76,34 +81,56 @@ export default function StudentCoursesPage() {
             <p className="text-gray-600 text-center py-8">No courses found</p>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courses.map((course) => (
-              <Card key={course.id} title={course.code}>
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-gray-900">{course.title}</h3>
-                  {course.instructor && (
-                    <p className="text-sm text-gray-600">Instructor: {course.instructor}</p>
-                  )}
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Progress</span>
-                    <span className="font-semibold">{course.completionPercentage || 0}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full"
-                      style={{ width: `${course.completionPercentage || 0}%` }}
-                    />
-                  </div>
-                  {course.grade && (
-                    <p className="text-sm text-gray-600">Grade: {course.grade}%</p>
-                  )}
-                  <button className="w-full mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    View Assignments
-                  </button>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Code</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Title</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Semester</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {courses.map((course) => (
+                    <tr key={course.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-gray-900 font-medium">{course.code}</td>
+                      <td className="py-3 px-4 text-gray-600">{course.title}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          course.status === 'ACTIVE'
+                            ? 'bg-green-100 text-green-800'
+                            : course.status === 'ARCHIVED'
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {course.status || 'ACTIVE'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600 text-xs">
+                        {course.semester_start 
+                          ? new Date(course.semester_start).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => handleViewCourse(course.id)}
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        >
+                          View Course
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
       </div>
     </RoleGuard>

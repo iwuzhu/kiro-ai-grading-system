@@ -63,7 +63,7 @@ import { Institution } from '../../domain/entities/institution.entity';
  * - NOT_FOUND (404): Institution not found
  * - INTERNAL_SERVER_ERROR (500): Unexpected server error
  */
-@Controller('api/v1/settings')
+@Controller('settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class InstitutionsController {
   constructor(private institutionManagementService: InstitutionManagementService) {}

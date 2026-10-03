@@ -6,6 +6,7 @@ import { Institution } from '../../domain/entities/institution.entity';
 import { User } from '../../domain/entities/user.entity';
 import { Course } from '../../domain/entities/course.entity';
 import { CourseEnrollment } from '../../domain/entities/course-enrollment.entity';
+import { Assignment } from '../../domain/entities/assignment.entity';
 import { AuditLog } from '../../domain/entities/audit-log.entity';
 
 /**
@@ -226,12 +227,23 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
 
     // Step 3: Create test courses and enrollments
     const courseCreations = await this.findCreatedUsers(userRepo, institution);
-    await this.createTestCoursesAndEnrollments(
+    const courses = await this.createTestCoursesAndEnrollments(
       courseRepo,
       enrollmentRepo,
       institution,
       courseCreations
     );
+
+    // Step 3.5: Create test assignments for courses
+    const assignmentRepo = this.dataSource.getRepository(Assignment);
+    if (courses.length > 0) {
+      await this.createTestAssignments(
+        assignmentRepo,
+        institution,
+        courseCreations.teacher,
+        courses
+      );
+    }
 
     // Step 4: Seed audit logs
     await this.seedAuditLogs(auditLogRepo, userRepo, institution);
@@ -477,14 +489,16 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
     enrollmentRepo: Repository<CourseEnrollment>,
     institution: Institution,
     users: Record<string, User>,
-  ): Promise<void> {
+  ): Promise<Course[]> {
     const teacher = users['teacher1@deepgrader.com'];
     const student = users['student1@deepgrader.com'];
 
     if (!teacher || !student) {
       this.logger.warn('Skipping course creation - teacher or student not found');
-      return;
+      return [];
     }
+
+    const createdCourses: Course[] = [];
 
     // Define test courses
     const testCourses = [
@@ -514,29 +528,33 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
         },
       });
 
+      let course: Course;
       if (existingCourse) {
         this.logger.log(`✓ Course ${courseData.code} already exists`);
-        continue;
+        course = existingCourse;
+      } else {
+        // Create course
+        this.logger.log(`Creating test course: ${courseData.code} - ${courseData.title}...`);
+        course = courseRepo.create({
+          tenant_id: institution.tenant_id,
+          institution_id: institution.id,
+          created_by_user_id: teacher.id,
+          code: courseData.code,
+          title: courseData.title,
+          description: courseData.description,
+          status: 'ACTIVE',
+        });
+        course = await courseRepo.save(course);
+        this.logger.log(`✓ Created course: ${courseData.code}`);
       }
 
-      // Create course
-      this.logger.log(`Creating test course: ${courseData.code} - ${courseData.title}...`);
-      const course = courseRepo.create({
-        tenant_id: institution.tenant_id,
-        institution_id: institution.id,
-        created_by_user_id: teacher.id,
-        code: courseData.code,
-        title: courseData.title,
-        description: courseData.description,
-        status: 'ACTIVE',
-      });
+      createdCourses.push(course);
 
-      const savedCourse = await courseRepo.save(course);
-
+      // Always check and create enrollments (even if course already existed)
       // Enroll teacher as instructor
       const teacherEnrollment = await enrollmentRepo.findOne({
         where: {
-          course_id: savedCourse.id,
+          course_id: course.id,
           user_id: teacher.id,
           role: 'INSTRUCTOR',
         },
@@ -546,7 +564,7 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
         this.logger.log(`  Enrolling teacher as INSTRUCTOR...`);
         const enrollment = enrollmentRepo.create({
           tenant_id: institution.tenant_id,
-          course_id: savedCourse.id,
+          course_id: course.id,
           user_id: teacher.id,
           role: 'INSTRUCTOR',
         });
@@ -557,7 +575,7 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
       // Enroll student
       const studentEnrollment = await enrollmentRepo.findOne({
         where: {
-          course_id: savedCourse.id,
+          course_id: course.id,
           user_id: student.id,
           role: 'STUDENT',
         },
@@ -567,16 +585,226 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
         this.logger.log(`  Enrolling student as STUDENT...`);
         const enrollment = enrollmentRepo.create({
           tenant_id: institution.tenant_id,
-          course_id: savedCourse.id,
+          course_id: course.id,
           user_id: student.id,
           role: 'STUDENT',
         });
         await enrollmentRepo.save(enrollment);
         this.logger.log(`  ✓ Student enrolled`);
       }
-
-      this.logger.log(`✓ Created course: ${courseData.code}`);
     }
+
+    return createdCourses;
+  }
+
+  /**
+   * Create test assignments for courses
+   * Creates sample assignments for CS101, CS201, and CS301
+   */
+  private async createTestAssignments(
+    assignmentRepo: Repository<Assignment>,
+    institution: Institution,
+    teacher: User,
+    courses: Course[],
+  ): Promise<void> {
+    // Find CS101 course
+    const cs101 = courses.find(c => c.code === 'CS101');
+    const cs201 = courses.find(c => c.code === 'CS201');
+    const cs301 = courses.find(c => c.code === 'CS301');
+
+    if (!cs101 && !cs201 && !cs301) {
+      this.logger.warn('No courses found for assignment creation');
+      return;
+    }
+
+    // Set deadlines - soft deadline 1 week from now, hard deadline 1.5 weeks
+    const now = new Date();
+    const softDeadlineCs101 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const hardDeadlineCs101 = new Date(now.getTime() + 10.5 * 24 * 60 * 60 * 1000);
+
+    const softDeadlineCs201 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const hardDeadlineCs201 = new Date(now.getTime() + 17.5 * 24 * 60 * 60 * 1000);
+
+    const softDeadlineCs301 = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
+    const hardDeadlineCs301 = new Date(now.getTime() + 24.5 * 24 * 60 * 60 * 1000);
+
+    if (cs101) {
+      // Check if assignments already exist for this course
+      const existingCount = await assignmentRepo.count({
+        where: { course_id: cs101.id },
+      });
+
+      if (existingCount === 0) {
+        this.logger.log(`Creating test assignments for CS101...`);
+
+        const assignments = [
+          {
+            title: 'Midterm Essay',
+            description: 'Write a 2000-word essay on the fundamentals of programming languages. Include discussion of variables, functions, and control flow.',
+            type: 'ESSAY' as const,
+            point_value: 100,
+            soft_deadline: softDeadlineCs101,
+            hard_deadline: hardDeadlineCs101,
+            late_penalty_percent: 10,
+            allow_incremental: true,
+          },
+          {
+            title: 'Programming Project: Hello World',
+            description: 'Create a simple program that prints "Hello, World!" in at least 3 different programming languages. Document your code with comments.',
+            type: 'CODE' as const,
+            point_value: 50,
+            soft_deadline: new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000),
+            hard_deadline: new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000),
+            late_penalty_percent: 5,
+            allow_incremental: true,
+          },
+          {
+            title: 'Quiz: Computer Science Basics',
+            description: 'Take this 20-question quiz covering course materials from weeks 1-3. You will have 60 minutes to complete it.',
+            type: 'QUIZ' as const,
+            point_value: 25,
+            soft_deadline: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
+            hard_deadline: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
+            late_penalty_percent: 15,
+            allow_incremental: false,
+          },
+        ];
+
+        for (const assignmentData of assignments) {
+          const assignment = assignmentRepo.create({
+            tenant_id: institution.tenant_id,
+            course_id: cs101.id,
+            created_by_user_id: teacher.id,
+            title: assignmentData.title,
+            description: assignmentData.description,
+            type: assignmentData.type,
+            point_value: assignmentData.point_value,
+            soft_deadline: assignmentData.soft_deadline,
+            hard_deadline: assignmentData.hard_deadline,
+            late_penalty_percent: assignmentData.late_penalty_percent,
+            allow_incremental: assignmentData.allow_incremental,
+            published_at: now,
+            published_by_user_id: teacher.id,
+          });
+          await assignmentRepo.save(assignment);
+          this.logger.log(`  ✓ Created assignment: ${assignmentData.title}`);
+        }
+      } else {
+        this.logger.log(`✓ CS101 already has ${existingCount} assignments`);
+      }
+    }
+
+    if (cs201) {
+      const existingCount = await assignmentRepo.count({
+        where: { course_id: cs201.id },
+      });
+
+      if (existingCount === 0) {
+        this.logger.log(`Creating test assignments for CS201...`);
+
+        const assignments = [
+          {
+            title: 'Implement Binary Search Tree',
+            description: 'Implement a binary search tree data structure with insert, delete, and search operations. Provide unit tests for each operation.',
+            type: 'CODE' as const,
+            point_value: 150,
+            soft_deadline: softDeadlineCs201,
+            hard_deadline: hardDeadlineCs201,
+            late_penalty_percent: 5,
+            allow_incremental: true,
+          },
+          {
+            title: 'Algorithm Analysis Essay',
+            description: 'Analyze the time complexity of quicksort, mergesort, and bubble sort. Write a 1500-word essay comparing their performance characteristics.',
+            type: 'ESSAY' as const,
+            point_value: 75,
+            soft_deadline: new Date(now.getTime() + 11 * 24 * 60 * 60 * 1000),
+            hard_deadline: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
+            late_penalty_percent: 10,
+            allow_incremental: false,
+          },
+        ];
+
+        for (const assignmentData of assignments) {
+          const assignment = assignmentRepo.create({
+            tenant_id: institution.tenant_id,
+            course_id: cs201.id,
+            created_by_user_id: teacher.id,
+            title: assignmentData.title,
+            description: assignmentData.description,
+            type: assignmentData.type,
+            point_value: assignmentData.point_value,
+            soft_deadline: assignmentData.soft_deadline,
+            hard_deadline: assignmentData.hard_deadline,
+            late_penalty_percent: assignmentData.late_penalty_percent,
+            allow_incremental: assignmentData.allow_incremental,
+            published_at: now,
+            published_by_user_id: teacher.id,
+          });
+          await assignmentRepo.save(assignment);
+          this.logger.log(`  ✓ Created assignment: ${assignmentData.title}`);
+        }
+      } else {
+        this.logger.log(`✓ CS201 already has ${existingCount} assignments`);
+      }
+    }
+
+    if (cs301) {
+      const existingCount = await assignmentRepo.count({
+        where: { course_id: cs301.id },
+      });
+
+      if (existingCount === 0) {
+        this.logger.log(`Creating test assignments for CS301...`);
+
+        const assignments = [
+          {
+            title: 'Build a Personal Portfolio Website',
+            description: 'Create a responsive personal portfolio website showcasing your projects. Use HTML, CSS, and JavaScript. Deploy to GitHub Pages or similar service.',
+            type: 'CODE' as const,
+            point_value: 200,
+            soft_deadline: softDeadlineCs301,
+            hard_deadline: hardDeadlineCs301,
+            late_penalty_percent: 5,
+            allow_incremental: true,
+          },
+          {
+            title: 'Web Development Trends Report',
+            description: 'Research and write a 2000-word report on the latest trends in web development. Include discussion of frameworks, tools, and best practices.',
+            type: 'ESSAY' as const,
+            point_value: 100,
+            soft_deadline: new Date(now.getTime() + 18 * 24 * 60 * 60 * 1000),
+            hard_deadline: new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000),
+            late_penalty_percent: 8,
+            allow_incremental: false,
+          },
+        ];
+
+        for (const assignmentData of assignments) {
+          const assignment = assignmentRepo.create({
+            tenant_id: institution.tenant_id,
+            course_id: cs301.id,
+            created_by_user_id: teacher.id,
+            title: assignmentData.title,
+            description: assignmentData.description,
+            type: assignmentData.type,
+            point_value: assignmentData.point_value,
+            soft_deadline: assignmentData.soft_deadline,
+            hard_deadline: assignmentData.hard_deadline,
+            late_penalty_percent: assignmentData.late_penalty_percent,
+            allow_incremental: assignmentData.allow_incremental,
+            published_at: now,
+            published_by_user_id: teacher.id,
+          });
+          await assignmentRepo.save(assignment);
+          this.logger.log(`  ✓ Created assignment: ${assignmentData.title}`);
+        }
+      } else {
+        this.logger.log(`✓ CS301 already has ${existingCount} assignments`);
+      }
+    }
+
+    this.logger.log('✓ Test assignments creation complete');
   }
 
   /**

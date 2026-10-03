@@ -18,6 +18,7 @@ import { UserRole } from '../../infrastructure/auth/types';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CourseManagementService } from '../../domain/services/course-management.service';
 import { CourseEnrollmentService } from '../../domain/services/course-enrollment.service';
+import { AssignmentManagementService } from '../../domain/services/assignment-management.service';
 import { CreateCourseDto } from './dtos/create-course.dto';
 import { UpdateCourseDto } from './dtos/update-course.dto';
 import { EnrollStudentDto, EnrollStudentsFromCsvDto } from './dtos/enroll-students.dto';
@@ -39,7 +40,7 @@ import { EnrollStudentDto, EnrollStudentsFromCsvDto } from './dtos/enroll-studen
  * ✓ POST enroll (instructor+)
  * ✓ All responses follow standard format
  */
-@Controller('api/v1/:institution_id/courses')
+@Controller('courses')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class CoursesController {
   constructor(
@@ -47,12 +48,13 @@ export class CoursesController {
     private readonly courseManagementService: CourseManagementService,
     @Inject(CourseEnrollmentService)
     private readonly enrollmentService: CourseEnrollmentService,
+    @Inject(AssignmentManagementService)
+    private readonly assignmentService: AssignmentManagementService,
   ) {}
 
   /**
    * Create a new course
-   * POST /api/v1/{institution_id}/courses
-   * @param institutionId - Institution ID
+   * POST /api/v1/courses
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
    * @param createCourseDto - Course data
@@ -60,19 +62,14 @@ export class CoursesController {
   @Post()
   @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
   async createCourse(
-    @Param('institution_id') institutionId: string,
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: any,
     @Body() createCourseDto: CreateCourseDto,
   ) {
-    if (createCourseDto.institution_id !== institutionId) {
-      throw new BadRequestException('Institution ID mismatch');
-    }
-
     try {
       const course = await this.courseManagementService.createCourse(
         tenantId,
-        user.sub,
+        user.id,
         {
           ...createCourseDto,
           semester_start: createCourseDto.semester_start
@@ -96,15 +93,13 @@ export class CoursesController {
 
   /**
    * Get all courses for current user
-   * GET /api/v1/{institution_id}/courses
-   * @param institutionId - Institution ID
+   * GET /api/v1/courses
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
    * @param userRole - Current user role
    */
   @Get()
   async getCourses(
-    @Param('institution_id') institutionId: string,
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: any,
   ) {
@@ -139,7 +134,7 @@ export class CoursesController {
 
   /**
    * Get course details
-   * GET /api/v1/{institution_id}/courses/{course_id}
+   * GET /api/v1/courses/{course_id}
    * @param courseId - Course ID
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
@@ -179,7 +174,7 @@ export class CoursesController {
 
   /**
    * Update course
-   * PATCH /api/v1/{institution_id}/courses/{course_id}
+   * PATCH /api/v1/courses/{course_id}
    * @param courseId - Course ID
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
@@ -221,7 +216,7 @@ export class CoursesController {
 
   /**
    * Archive course
-   * PATCH /api/v1/{institution_id}/courses/{course_id}/archive
+   * PATCH /api/v1/courses/{course_id}/archive
    * @param courseId - Course ID
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
@@ -252,7 +247,7 @@ export class CoursesController {
 
   /**
    * Delete course
-   * DELETE /api/v1/{institution_id}/courses/{course_id}
+   * DELETE /api/v1/courses/{course_id}
    * @param courseId - Course ID
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
@@ -283,7 +278,7 @@ export class CoursesController {
 
   /**
    * Enroll a student in a course
-   * POST /api/v1/{institution_id}/courses/{course_id}/enroll
+   * POST /api/v1/courses/{course_id}/enroll
    * @param courseId - Course ID
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
@@ -316,7 +311,7 @@ export class CoursesController {
 
   /**
    * Bulk enroll students from CSV
-   * POST /api/v1/{institution_id}/courses/{course_id}/enroll-bulk
+   * POST /api/v1/courses/{course_id}/enroll-bulk
    * @param courseId - Course ID
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
@@ -349,7 +344,7 @@ export class CoursesController {
 
   /**
    * Get enrolled students in a course
-   * GET /api/v1/{institution_id}/courses/{course_id}/students
+   * GET /api/v1/courses/{course_id}/students
    * @param courseId - Course ID
    * @param tenantId - Current tenant ID
    * @param userId - Current user ID
@@ -379,7 +374,7 @@ export class CoursesController {
 
   /**
    * Remove student from course
-   * DELETE /api/v1/{institution_id}/courses/{course_id}/students/{student_id}
+   * DELETE /api/v1/courses/{course_id}/students/{student_id}
    * @param courseId - Course ID
    * @param studentId - Student user ID
    * @param tenantId - Current tenant ID
@@ -403,6 +398,41 @@ export class CoursesController {
       return {
         success: true,
         data: enrollment,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get assignments for a course
+   * GET /api/v1/courses/{course_id}/assignments
+   * @param courseId - Course ID
+   * @param tenantId - Current tenant ID
+   * @param userId - Current user ID
+   * @param userRole - Current user role
+   */
+  @Get(':course_id/assignments')
+  async getAssignments(
+    @Param('course_id') courseId: string,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+  ) {
+    try {
+      // Students see only published assignments
+      const includeUnpublished =
+        user.role === 'INSTRUCTOR' || user.role === 'ADMIN';
+
+      const assignments = await this.assignmentService.getAssignmentsByCourse(
+        tenantId,
+        courseId,
+        includeUnpublished,
+      );
+
+      return {
+        success: true,
+        data: assignments,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
