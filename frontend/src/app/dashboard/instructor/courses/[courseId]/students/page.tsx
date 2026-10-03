@@ -6,6 +6,20 @@ import { RoleGuard } from '@/components/auth/RoleGuard'
 import { Card, LoadingSpinner } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
 
+interface User {
+  id: string
+  email: string
+  full_name?: string
+}
+
+interface CourseEnrollment {
+  id: string
+  user: User
+  role: string
+  enrolled_at: string
+  unenrolled_at?: string
+}
+
 interface Student {
   id: string
   email: string
@@ -86,7 +100,19 @@ export default function EnrolledStudentsPage() {
 
         if (response.ok) {
           const data = await response.json()
-          setStudents(data.data || [])
+          console.log('Enrolled students data:', data)
+          // Map enrollment objects to student format
+          const enrollmentData = data.data || []
+          console.log('Enrollment array:', enrollmentData)
+          const mappedStudents: Student[] = enrollmentData.map((enrollment: CourseEnrollment) => ({
+            id: enrollment.user?.id || enrollment.id,
+            email: enrollment.user?.email || 'N/A',
+            full_name: enrollment.user?.full_name,
+            status: 'ACTIVE', // All returned enrollments are active (unenrolled_at is null)
+            enrolled_at: enrollment.enrolled_at,
+          }))
+          console.log('Mapped students:', mappedStudents)
+          setStudents(mappedStudents)
         } else if (response.status === 404) {
           setError('Course not found')
         } else {
@@ -100,7 +126,7 @@ export default function EnrolledStudentsPage() {
       }
     }
 
-    if (courseId && user?.role === 'instructor') {
+    if (courseId && (user?.role === 'instructor' || user?.role === 'admin')) {
       fetchEnrolledStudents()
     }
   }, [courseId, user])
