@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Req,
+  Res,
   BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -56,6 +57,7 @@ export class SubmissionsController {
   async downloadSubmission(
     @CurrentTenant() tenantId: string,
     @Param('submissionId') submissionId: string,
+    @Res() res: any,
   ) {
     try {
       const submission = await this.submissionManagementService.getSubmissionById(
@@ -64,37 +66,35 @@ export class SubmissionsController {
       );
 
       if (!submission.file_path) {
-        return {
+        return res.status(404).json({
           success: false,
           error: {
             code: 'NO_FILE',
             message: 'Submission has no file',
           },
-        };
+        });
       }
 
-      // Generate signed URL for secure download
-      const signedUrl = this.s3Service.generateSignedUrl(
-        submission.file_path,
-        3600, // 1 hour expiration
-      );
+      // Get file from S3/storage
+      const fileBuffer = await this.s3Service.downloadFile(submission.file_path);
+      const fileName = submission.file_path.split('/').pop() || 'submission';
 
-      return {
-        success: true,
-        data: {
-          file_name: submission.file_path.split('/').pop(),
-          download_url: signedUrl,
-          expires_in: 3600,
-        },
-      };
+      // Set response headers for file download
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Length', fileBuffer.length);
+
+      // Send the file as binary data
+      res.send(fileBuffer);
     } catch (error) {
-      return {
+      res.status(500).json({
         success: false,
         error: {
           code: 'DOWNLOAD_FAILED',
-          message: error.message,
+          message: error instanceof Error ? error.message : 'Failed to download file',
         },
-      };
+      });
     }
   }
 

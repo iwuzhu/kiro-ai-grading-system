@@ -21,13 +21,18 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
+  const [fileName, setFileName] = useState<string | null>(null)
 
   useEffect(() => {
     if (!submissionId || !filePath) {
       setError('No submission file available')
       return
     }
+
+    // Extract file name from path
+    const extractedFileName = filePath.split('/').pop() || 'submission'
+    setFileName(extractedFileName)
 
     const fetchContent = async () => {
       setLoading(true)
@@ -39,31 +44,22 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
           throw new Error('Authentication required')
         }
 
-        // Get signed download URL
-        const downloadResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/v1/submissions/download/${submissionId}`,
-          {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        )
+        // For text-based files, fetch and display content
+        if (isTextFile(fileType)) {
+          const contentResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/v1/submissions/${submissionId}`,
+            {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          )
 
-        if (!downloadResponse.ok) {
-          throw new Error('Failed to get download URL')
-        }
-
-        const downloadData = await downloadResponse.json()
-        if (downloadData.data?.download_url) {
-          setDownloadUrl(downloadData.data.download_url)
-
-          // For text-based files, fetch and display content
-          if (isTextFile(fileType)) {
-            const contentResponse = await fetch(downloadData.data.download_url)
-            if (contentResponse.ok) {
-              const contentText = await contentResponse.text()
-              setContent(contentText)
+          if (contentResponse.ok) {
+            const submissionData = await contentResponse.json()
+            if (submissionData.data?.content) {
+              setContent(submissionData.data.content)
             }
           }
         }
@@ -77,6 +73,53 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
 
     fetchContent()
   }, [submissionId, filePath])
+
+  const handleDownload = async () => {
+    if (!submissionId) return
+
+    setDownloading(true)
+    setError(null)
+
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) {
+        throw new Error('Authentication required')
+      }
+
+      // Fetch the file from backend
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/v1/submissions/download/${submissionId}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('Failed to download file')
+      }
+
+      // Get the binary data
+      const blob = await response.blob()
+
+      // Create a blob URL and trigger download
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = fileName || 'submission'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
+    } catch (err) {
+      console.error('Error downloading file:', err)
+      setError(err instanceof Error ? err.message : 'Failed to download file')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const isTextFile = (type?: string): boolean => {
     if (!type) return false
@@ -111,15 +154,18 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">Submission Content</h3>
-        {downloadUrl && (
-          <a
-            href={downloadUrl}
-            download
-            className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Download File
-          </a>
-        )}
+        <button
+          onClick={handleDownload}
+          disabled={downloading || !submissionId}
+          className={`text-sm px-3 py-1 rounded transition ${
+            downloading || !submissionId
+              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+          title={downloading ? 'Downloading...' : 'Download file to your computer'}
+        >
+          {downloading ? '⬇️ Downloading...' : '⬇️ Download File'}
+        </button>
       </div>
 
       {/* File Info */}
@@ -143,11 +189,9 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
       ) : error ? (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800 text-sm">{error}</p>
-          {downloadUrl && (
-            <p className="text-yellow-700 text-xs mt-2">
-              📥 Download the file directly to view it: <a href={downloadUrl} className="underline">Download</a>
-            </p>
-          )}
+          <p className="text-yellow-700 text-xs mt-2">
+            💡 Click &quot;Download File&quot; to save the submission locally.
+          </p>
         </div>
       ) : content ? (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -168,22 +212,18 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
           <p className="text-gray-700 text-sm">
             The submission content could not be displayed directly. 
           </p>
-          {downloadUrl && (
-            <p className="text-gray-600 text-sm mt-2">
-              Please <a href={downloadUrl} className="text-blue-600 hover:underline">download the file</a> to view it.
-            </p>
-          )}
+          <p className="text-gray-600 text-sm mt-2">
+            Click &quot;Download File&quot; above to save and view it locally.
+          </p>
         </div>
       ) : (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <p className="text-gray-700 text-sm">
             ℹ️ This submission is a {assignmentType.toLowerCase()} file. 
           </p>
-          {downloadUrl && (
-            <p className="text-gray-600 text-sm mt-2">
-              <a href={downloadUrl} className="text-blue-600 hover:underline">Download</a> to view or open it in the appropriate application.
-            </p>
-          )}
+          <p className="text-gray-600 text-sm mt-2">
+            Click &quot;Download File&quot; above to save and open it in the appropriate application.
+          </p>
         </div>
       )}
 
