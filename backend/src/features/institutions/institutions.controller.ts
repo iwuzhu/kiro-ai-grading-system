@@ -129,13 +129,24 @@ export class InstitutionsController {
    * @route PATCH /api/v1/:institution_id/settings
    * @rbac ADMIN only
    *
-   * Request (partial update):
+   * Request (partial update with nested settings):
    * {
    *   "name": "Updated University Name",
    *   "timezone": "UTC",
    *   "settings": {
-   *     "allow_anonymous_submissions": false
+   *     "plagiarismEnabled": true,
+   *     "plagiarismThreshold": 20,
+   *     "aiGradingEnabled": true,
+   *     "aiProvider": "openai"
    *   }
+   * }
+   *
+   * Or with top-level plagiarism/AI settings:
+   * {
+   *   "plagiarismEnabled": true,
+   *   "plagiarismThreshold": 20,
+   *   "aiGradingEnabled": true,
+   *   "aiProvider": "openai"
    * }
    *
    * Response: 200 OK with updated institution
@@ -153,13 +164,53 @@ export class InstitutionsController {
     error: null;
   }> {
     try {
+      // Build the settings object to pass to service
+      const updatePayload: Partial<{
+        name: string;
+        timezone: string;
+        plagiarism_threshold: number;
+        ai_provider: 'openai' | 'claude' | 'bedrock';
+        settings: Record<string, any>;
+      }> = {
+        name: dto.name,
+        timezone: dto.timezone,
+      };
+
+      // Handle AI provider - can come from either top-level or nested
+      if (dto.aiProvider) {
+        updatePayload.ai_provider = dto.aiProvider as 'openai' | 'claude' | 'bedrock';
+      } else if (dto.settings?.aiProvider) {
+        updatePayload.ai_provider = dto.settings.aiProvider as 'openai' | 'claude' | 'bedrock';
+      }
+
+      // Handle plagiarism threshold - can come from either top-level or nested
+      if (dto.plagiarismThreshold !== undefined) {
+        updatePayload.plagiarism_threshold = dto.plagiarismThreshold;
+      } else if (dto.settings?.plagiarismThreshold !== undefined) {
+        updatePayload.plagiarism_threshold = dto.settings.plagiarismThreshold;
+      }
+
+      // Build nested settings object for feature flags and other settings
+      const nestedSettings: Record<string, any> = {
+        ...dto.settings,
+      };
+
+      // Add top-level flags to nested settings
+      if (dto.plagiarismEnabled !== undefined) {
+        nestedSettings.plagiarismEnabled = dto.plagiarismEnabled;
+      }
+      if (dto.aiGradingEnabled !== undefined) {
+        nestedSettings.aiGradingEnabled = dto.aiGradingEnabled;
+      }
+
+      // Only add settings if we have any
+      if (Object.keys(nestedSettings).length > 0) {
+        updatePayload.settings = nestedSettings;
+      }
+
       const institution = await this.institutionManagementService.updateInstitutionSettings(
         tenantId,
-        {
-          name: dto.name,
-          timezone: dto.timezone,
-          settings: dto.settings,
-        },
+        updatePayload,
       );
 
       return {

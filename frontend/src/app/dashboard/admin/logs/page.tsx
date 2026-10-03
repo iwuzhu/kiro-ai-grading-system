@@ -53,6 +53,15 @@ export default function AdminLogsPage() {
   })
   const [addUserLoading, setAddUserLoading] = useState(false)
 
+  // Settings state
+  const [settings, setSettings] = useState({
+    plagiarismEnabled: true,
+    plagiarismThreshold: 20,
+    aiGradingEnabled: true,
+    aiProvider: 'openai',
+  })
+  const [settingsSaving, setSettingsSaving] = useState(false)
+
   const handleLogout = async () => {
     await logout()
     router.replace('/auth/login')
@@ -347,6 +356,85 @@ export default function AdminLogsPage() {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  const handleSaveSettings = async () => {
+    try {
+      setSettingsSaving(true)
+      const token = localStorage.getItem('accessToken')
+      const tenantId = localStorage.getItem('userTenant')
+
+      if (!token || !tenantId) {
+        setError('Not authenticated')
+        return
+      }
+
+      // Call backend to save settings using PATCH endpoint
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/v1/${tenantId}/settings`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            plagiarismEnabled: settings.plagiarismEnabled,
+            plagiarismThreshold: settings.plagiarismThreshold,
+            aiGradingEnabled: settings.aiGradingEnabled,
+            aiProvider: settings.aiProvider,
+          }),
+        },
+      )
+
+      if (response.status === 401) {
+        // Token expired, try to refresh
+        try {
+          await refresh()
+          // Retry the request with new token
+          const newToken = localStorage.getItem('accessToken')
+          const retryResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/v1/${tenantId}/settings`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${newToken}`,
+              },
+              body: JSON.stringify({
+                plagiarismEnabled: settings.plagiarismEnabled,
+                plagiarismThreshold: settings.plagiarismThreshold,
+                aiGradingEnabled: settings.aiGradingEnabled,
+                aiProvider: settings.aiProvider,
+              }),
+            },
+          )
+
+          if (retryResponse.ok) {
+            setError(null)
+            alert('Settings saved successfully!')
+          } else {
+            const errorData = await retryResponse.json()
+            setError(errorData.error?.message || 'Failed to save settings')
+          }
+        } catch (refreshError) {
+          setError('Session expired, please login again')
+          router.replace('/auth/login')
+        }
+      } else if (response.ok) {
+        setError(null)
+        // Show success message
+        alert('Settings saved successfully!')
+      } else {
+        const errorData = await response.json()
+        setError(errorData.error?.message || 'Failed to save settings')
+      }
+    } catch (err) {
+      console.error('Error saving settings:', err)
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setSettingsSaving(false)
     }
   }
 
@@ -1004,51 +1092,73 @@ export default function AdminLogsPage() {
               </div>
 
               <div className="space-y-4">
-                <Card>
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-lg">Plagiarism Detection</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-gray-700">Enable plagiarism checks</label>
-                        <input type="checkbox" defaultChecked className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Plagiarism Threshold (%)</label>
-                        <input
-                          type="number"
-                          defaultValue={20}
-                          min={0}
-                          max={100}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                        />
+                {/* Two-column grid layout for larger screens */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-lg">Plagiarism Detection</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Enable plagiarism checks</label>
+                          <input 
+                            type="checkbox" 
+                            checked={settings.plagiarismEnabled}
+                            onChange={(e) => setSettings({...settings, plagiarismEnabled: e.target.checked})}
+                            className="w-4 h-4" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Plagiarism Threshold (%)</label>
+                          <input
+                            type="number"
+                            value={settings.plagiarismThreshold}
+                            onChange={(e) => setSettings({...settings, plagiarismThreshold: parseInt(e.target.value)})}
+                            min={0}
+                            max={100}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
 
-                <Card>
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-lg">AI Grading</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-gray-700">Enable AI grading</label>
-                        <input type="checkbox" defaultChecked className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">AI Provider</label>
-                        <select className="w-full px-4 py-2 border border-gray-300 rounded-lg">
-                          <option>OpenAI (GPT-4)</option>
-                          <option>Claude (Anthropic)</option>
-                          <option>AWS Bedrock</option>
-                        </select>
+                  <Card>
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-lg">AI Grading</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Enable AI grading</label>
+                          <input 
+                            type="checkbox" 
+                            checked={settings.aiGradingEnabled}
+                            onChange={(e) => setSettings({...settings, aiGradingEnabled: e.target.checked})}
+                            className="w-4 h-4" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">AI Provider</label>
+                          <select 
+                            value={settings.aiProvider}
+                            onChange={(e) => setSettings({...settings, aiProvider: e.target.value})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                          >
+                            <option value="openai">OpenAI (GPT-4)</option>
+                            <option value="claude">Claude (Anthropic)</option>
+                            <option value="bedrock">AWS Bedrock</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+                </div>
 
                 <div className="flex gap-3">
-                  <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">
-                    Save Changes
+                  <button 
+                    onClick={handleSaveSettings}
+                    disabled={settingsSaving}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {settingsSaving ? 'Saving...' : 'Save Changes'}
                   </button>
                   <button className="border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 font-medium">
                     Cancel

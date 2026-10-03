@@ -13,6 +13,24 @@ import {
  * Update Institution Settings DTO
  *
  * Partial update - all fields optional
+ *
+ * Example:
+ * {
+ *   "plagiarismEnabled": true,
+ *   "plagiarismThreshold": 20,
+ *   "aiGradingEnabled": true,
+ *   "aiProvider": "openai"
+ * }
+ *
+ * Or with nested settings object:
+ * {
+ *   "settings": {
+ *     "plagiarismEnabled": true,
+ *     "plagiarismThreshold": 20,
+ *     "aiGradingEnabled": true,
+ *     "aiProvider": "openai"
+ *   }
+ * }
  */
 export class UpdateInstitutionSettingsDto {
   @IsString()
@@ -25,7 +43,30 @@ export class UpdateInstitutionSettingsDto {
 
   @IsObject()
   @IsOptional()
-  settings?: Record<string, any>;
+  settings?: {
+    plagiarismEnabled?: boolean;
+    plagiarismThreshold?: number;
+    aiGradingEnabled?: boolean;
+    aiProvider?: string;
+    [key: string]: any;
+  };
+
+  // Also accept top-level plagiarism/AI settings for convenience
+  @IsOptional()
+  plagiarismEnabled?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(100)
+  plagiarismThreshold?: number;
+
+  @IsOptional()
+  aiGradingEnabled?: boolean;
+
+  @IsEnum(['openai', 'claude', 'bedrock'])
+  @IsOptional()
+  aiProvider?: string;
 }
 
 /**
