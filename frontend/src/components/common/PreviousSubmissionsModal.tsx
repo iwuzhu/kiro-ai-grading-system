@@ -63,7 +63,7 @@ export const PreviousSubmissionsModal: React.FC<PreviousSubmissionsModalProps> =
 
       // Call backend to get signed download URL
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/v1/submissions/${submission.id}/download`,
+        `${process.env.NEXT_PUBLIC_API_URL}/v1/submissions/download/${submission.id}`,
         {
           method: 'GET',
           headers: {
