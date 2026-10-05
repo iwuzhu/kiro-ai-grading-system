@@ -5,6 +5,12 @@
  * Allows pluggable implementations for grading submissions
  */
 
+export interface SubmissionFile {
+  fileName: string;
+  fileType: string;
+  buffer: Buffer;
+}
+
 export interface AIGradingResponse {
   score: number; // 0-100
   confidence: number; // 0-100
@@ -19,15 +25,17 @@ export interface AIProvider {
   /**
    * Grade a submission using AI
    * 
-   * @param submissionContent - The submission content to grade
+   * @param submissionContent - The submission content to grade (text answers)
    * @param rubricText - The rubric criteria as text or JSON
    * @param assignmentDescription - Assignment instructions
+   * @param files - Optional files to send to AI provider
    * @returns AIGradingResponse with score, feedback, etc.
    */
   gradeSubmission(
     submissionContent: string,
     rubricText: string,
     assignmentDescription: string,
+    files?: SubmissionFile[],
   ): Promise<AIGradingResponse>;
 
   /**

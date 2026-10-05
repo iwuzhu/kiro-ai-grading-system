@@ -12,6 +12,8 @@ import { GradeOverrideRepository } from '../../domain/repositories/grade-overrid
 import { SubmissionRepository } from '../../domain/repositories/submission.repository';
 import { AssignmentRepository } from '../../domain/repositories/assignment.repository';
 import { OpenAIProvider } from '../../infrastructure/ai/openai.provider';
+import { S3Service } from '../../infrastructure/storage/s3.service';
+import { FilesModule } from '../files/files.module';
 
 /**
  * Grading Module
@@ -22,8 +24,9 @@ import { OpenAIProvider } from '../../infrastructure/ai/openai.provider';
  * - AI-powered grading via ChatGPT
  *
  * AI Grading:
- * - OpenAIProvider: ChatGPT (GPT-4o) integration
+ * - OpenAIProvider: ChatGPT (GPT-4o) integration with file support
  * - AIGradingService: Orchestrates AI grading workflow
+ * - Files sent directly to OpenAI (no local extraction)
  *
  * Exports:
  * - GradeOverrideService: Manual override management
@@ -38,6 +41,7 @@ import { OpenAIProvider } from '../../infrastructure/ai/openai.provider';
       Submission,
       Assignment,
     ]),
+    FilesModule,
   ],
   controllers: [GradingController],
   providers: [
@@ -48,6 +52,7 @@ import { OpenAIProvider } from '../../infrastructure/ai/openai.provider';
     SubmissionRepository,
     AssignmentRepository,
     OpenAIProvider,
+    S3Service,
     // Provide OpenAIProvider as the AIProvider interface
     {
       provide: 'AIProvider',

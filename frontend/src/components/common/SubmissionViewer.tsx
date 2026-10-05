@@ -250,7 +250,10 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
         <div className="flex gap-2">
           {onAIGradeClick && (
             <button
-              onClick={() => onAIGradeClick(submissionId)}
+              onClick={() => {
+                console.log('[SubmissionViewer] AI Grade button clicked with submissionId:', submissionId)
+                onAIGradeClick(submissionId)
+              }}
               disabled={aiGradeLoading || !submissionId}
               className={`text-sm px-3 py-1 rounded transition ${
                 aiGradeLoading || !submissionId

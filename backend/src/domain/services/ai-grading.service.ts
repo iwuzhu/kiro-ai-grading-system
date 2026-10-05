@@ -1,14 +1,19 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { AIProvider } from './ai-provider.interface';
+import { AIProvider, SubmissionFile } from './ai-provider.interface';
 import { GradeRepository } from '../repositories/grade.repository';
 import { SubmissionRepository } from '../repositories/submission.repository';
 import { AssignmentRepository } from '../repositories/assignment.repository';
 import { Grade } from '../entities/grade.entity';
+import { S3Service } from '../../infrastructure/storage/s3.service';
 
 export interface AIGradingRequest {
   tenantId: string;
   submissionId: string;
   assignmentId: string;
+  submissionContent?: string;   // NEW: Optional content from frontend
+  rubricText?: string;           // NEW: Optional rubric from frontend
+  assignmentDescription?: string; // NEW: Optional assignment description from frontend
+  files?: SubmissionFile[];       // NEW: Optional files to send to OpenAI
 }
 
 export interface AIGradingResult {
@@ -27,6 +32,7 @@ export class AIGradingService {
     private gradeRepository: GradeRepository,
     private submissionRepository: SubmissionRepository,
     private assignmentRepository: AssignmentRepository,
+    private s3Service: S3Service,
   ) {}
 
   /**
@@ -34,6 +40,10 @@ export class AIGradingService {
    *
    * @param request - Grading request with submission and assignment IDs
    * @returns Grade object with AI-generated score and feedback
+   * 
+   * Optimization: If submission and rubric are already cached in the
+   * Submission Content component, backend only calls AI provider without
+   * additional fetches. Otherwise, fetches from database.
    */
   async gradeSubmission(request: AIGradingRequest): Promise<AIGradingResult> {
     const startTime = Date.now();
@@ -43,31 +53,51 @@ export class AIGradingService {
         `Starting AI grading for submission ${request.submissionId}`,
       );
 
-      // Step 1: Fetch submission
-      const submission = await this.submissionRepository.findById(
-        request.tenantId,
-        request.submissionId,
-      );
+      // Step 1: Use provided content or fetch submission
+      let submission: any;
+      let rubricText: string;
+      let assignmentDescription: string;
 
-      if (!submission) {
-        throw new Error(
-          `Submission not found: ${request.submissionId}`,
+      // If content provided from frontend, use it directly
+      if (request.submissionContent && request.rubricText && request.assignmentDescription) {
+        this.logger.debug('Using content provided from frontend');
+        submission = { 
+          content: request.submissionContent,
+          submitted_at: new Date()
+        };
+        rubricText = request.rubricText;
+        assignmentDescription = request.assignmentDescription;
+      } else {
+        // Otherwise fetch from database
+        this.logger.debug('Fetching content from database');
+        
+        submission = await this.submissionRepository.findById(
+          request.tenantId,
+          request.submissionId,
         );
+
+        if (!submission) {
+          throw new Error(
+            `Submission not found: ${request.submissionId}`,
+          );
+        }
+
+        const assignment = await this.assignmentRepository.findById(
+          request.tenantId,
+          request.assignmentId,
+        );
+
+        if (!assignment) {
+          throw new Error(
+            `Assignment not found: ${request.assignmentId}`,
+          );
+        }
+
+        rubricText = this.formatRubric(assignment);
+        assignmentDescription = assignment.description || 'No description provided';
       }
 
-      // Step 2: Fetch assignment with rubric
-      const assignment = await this.assignmentRepository.findById(
-        request.assignmentId,
-        request.tenantId,
-      );
-
-      if (!assignment) {
-        throw new Error(
-          `Assignment not found: ${request.assignmentId}`,
-        );
-      }
-
-      // Step 3: Check if grade already exists
+      // Step 2: Check if grade already exists
       const existingGrade = await this.gradeRepository.findBySubmission(
         request.tenantId,
         request.submissionId,
@@ -79,74 +109,61 @@ export class AIGradingService {
         );
       }
 
-      // Step 4: Extract rubric and assignment description
-      const rubricText = this.formatRubric(assignment);
-      const assignmentDescription =
-        assignment.description || 'No description provided';
+      // Step 3: Get submission content and files
+      const submissionContent = await this.formatSubmissionContent(submission);
+      const submissionFiles = await this.prepareSubmissionFiles(submission);
 
-      // Step 5: Get submission content
-      const submissionContent = this.formatSubmissionContent(submission);
-
-      // Step 6: Call AI provider
-      this.logger.debug('Calling AI provider...');
+      // Step 4: Call AI provider with content and files
+      this.logger.debug(`Calling AI provider with ${submissionFiles.length} file(s)...`);
       const aiResponse = await this.aiProvider.gradeSubmission(
         submissionContent,
         rubricText,
         assignmentDescription,
+        submissionFiles, // Pass files to OpenAI
       );
 
-      // Step 7: Create or update grade
-      let grade: Grade;
-      if (existingGrade) {
-        // Update existing grade
-        existingGrade.ai_score = aiResponse.score;
-        existingGrade.confidence = aiResponse.confidence;
-        existingGrade.final_score = aiResponse.score; // Initial final score
-        existingGrade.feedback = aiResponse.feedback;
-        existingGrade.strengths = aiResponse.strengths;
-        existingGrade.improvements = aiResponse.improvements;
-        existingGrade.status = 'AI_GRADED';
-        existingGrade.grade_details = {
+      // Step 5: Return AI response WITHOUT saving to database
+      // NOTE: Only the "Save Grade" button endpoint should persist to database
+      // This endpoint only generates the AI grade for frontend display
+      
+      const gradeData = {
+        id: existingGrade?.id || 'temp-' + request.submissionId, // Temp ID until saved
+        tenant_id: request.tenantId,
+        submission_id: request.submissionId,
+        assignment_id: request.assignmentId,
+        ai_score: aiResponse.score,
+        confidence: aiResponse.confidence,
+        final_score: aiResponse.score,
+        feedback: aiResponse.feedback,
+        strengths: aiResponse.strengths,
+        improvements: aiResponse.improvements,
+        status: 'AI_GRADED',
+        graded_by_user_id: null, // AI-generated, not by user
+        grade_type: 'overall_submission',
+        grade_details: {
           aiProvider: this.aiProvider.getProviderName(),
           reasoning: aiResponse.reasoning,
           rubricAlignment: aiResponse.rubricAlignment,
           aiGradedAt: new Date().toISOString(),
-        };
-        existingGrade.updated_at = new Date();
+        },
+        created_at: existingGrade?.created_at || new Date(),
+        updated_at: new Date(),
+      };
 
-        grade = await this.gradeRepository.save(existingGrade);
-      } else {
-        // Create new grade
-        grade = await this.gradeRepository.createGrade({
-          tenant_id: request.tenantId,
-          submission_id: request.submissionId,
-          assignment_id: request.assignmentId,
-          ai_score: aiResponse.score,
-          confidence: aiResponse.confidence,
-          final_score: aiResponse.score,
-          feedback: aiResponse.feedback,
-          strengths: aiResponse.strengths,
-          improvements: aiResponse.improvements,
-          status: 'AI_GRADED',
-          graded_by_user_id: null, // AI-generated, not by user
-          grade_type: 'overall_submission',
-          grade_details: {
-            aiProvider: this.aiProvider.getProviderName(),
-            reasoning: aiResponse.reasoning,
-            rubricAlignment: aiResponse.rubricAlignment,
-            aiGradedAt: new Date().toISOString(),
-          },
-        });
-      }
+      // ✅ Do NOT save to database here
+      // This allows frontend to:
+      // 1. Display the AI grade in the form
+      // 2. Let instructor review it
+      // 3. Instructor clicks "Save Grade" button to actually persist
 
       const processingTimeMs = Date.now() - startTime;
 
       this.logger.log(
-        `AI grading completed for submission ${request.submissionId}: score=${grade.ai_score}, confidence=${grade.confidence}, time=${processingTimeMs}ms`,
+        `AI grading completed for submission ${request.submissionId}: score=${gradeData.ai_score}, confidence=${gradeData.confidence}, time=${processingTimeMs}ms`,
       );
 
       return {
-        grade,
+        grade: gradeData as any,
         provider: this.aiProvider.getProviderName(),
         processingTimeMs,
       };
@@ -192,22 +209,64 @@ export class AIGradingService {
 
   /**
    * Format submission content for AI prompt
+   * Extracts text answers from content.answers if present
+   * Files are sent separately to OpenAI, not included in prompt
    */
-  private formatSubmissionContent(submission: any): string {
-    if (!submission.content) {
-      return '[No content submitted]';
+  private async formatSubmissionContent(submission: any): Promise<string> {
+    // Extract text answers from content.answers if present
+    if (submission.content && typeof submission.content === 'object') {
+      const answers = submission.content.answers || []
+      
+      if (Array.isArray(answers) && answers.length > 0) {
+        const answersText = answers
+          .map((answer: any, idx: number) => {
+            const questionId = answer.questionId || `Q${idx + 1}`
+            const answerText = answer.answer || '[No answer provided]'
+            const type = answer.type || 'SHORT_ANSWER'
+            return `Question ${questionId} (${type}):\n${answerText}`
+          })
+          .join('\n\n---\n\n')
+        
+        return `STUDENT ANSWERS:\n${answersText}`
+      }
     }
 
-    if (typeof submission.content === 'string') {
-      return submission.content;
+    return '[No text answers submitted]'
+  }
+
+  /**
+   * Prepare submission files for OpenAI
+   * Downloads files from S3 and returns as buffers with metadata
+   */
+  private async prepareSubmissionFiles(submission: any): Promise<SubmissionFile[]> {
+    const files: SubmissionFile[] = []
+
+    if (!submission.file_path) {
+      return files
     }
 
-    // If content is JSON
-    if (typeof submission.content === 'object') {
-      return JSON.stringify(submission.content, null, 2);
+    try {
+      this.logger.debug(`[prepareSubmissionFiles] Preparing file: ${submission.file_path}`)
+      
+      // Download file from S3
+      const fileBuffer = await this.s3Service.downloadFile(submission.file_path)
+      
+      const fileName = submission.file_path.split('/').pop() || 'submission'
+      const fileType = submission.file_type || 'application/octet-stream'
+      
+      files.push({
+        fileName,
+        fileType,
+        buffer: fileBuffer,
+      })
+
+      this.logger.debug(`[prepareSubmissionFiles] File prepared: ${fileName} (${fileType}, ${fileBuffer.length} bytes)`)
+    } catch (error) {
+      this.logger.warn(`[prepareSubmissionFiles] Could not prepare file: ${error instanceof Error ? error.message : String(error)}`)
+      // Continue without the file - don't fail the entire grading
     }
 
-    return String(submission.content);
+    return files
   }
 
   /**

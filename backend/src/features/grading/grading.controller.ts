@@ -428,6 +428,9 @@ export class GradingController {
     body: {
       submission_id: string;
       assignment_id: string;
+      submission_content?: string;  // NEW: Content from frontend
+      rubric_text?: string;          // NEW: Rubric from frontend
+      assignment_description?: string; // NEW: Assignment description from frontend
     },
   ) {
     try {
@@ -442,28 +445,45 @@ export class GradingController {
         };
       }
 
-      // Inject AIGradingService via constructor (to be added to module)
-      // For now, this demonstrates the endpoint structure
-      const aiGradingService = this.aiGradingService;
-
-      if (!aiGradingService) {
+      // Check if AI provider is configured
+      if (!this.aiGradingService.isConfigured()) {
         return {
           success: false,
           error: {
-            code: 'AI_GRADING_UNAVAILABLE',
-            message: 'AI grading service not configured',
+            code: 'AI_PROVIDER_NOT_CONFIGURED',
+            message: 'AI grading provider is not configured. Please set TECOpenAIAPIKeyDeepGrader secret in AWS Secrets Manager.',
           },
         };
       }
 
       // Call AI grading service
-      const result = await aiGradingService.gradeSubmission({
+      console.log('[gradeWithAI] Calling AI grading service with:', {
         tenantId,
         submissionId: body.submission_id,
         assignmentId: body.assignment_id,
+        hasSubmissionContent: !!body.submission_content,
+        hasRubricText: !!body.rubric_text,
+        hasAssignmentDescription: !!body.assignment_description,
       });
 
-      return {
+      const result = await this.aiGradingService.gradeSubmission({
+        tenantId,
+        submissionId: body.submission_id,
+        assignmentId: body.assignment_id,
+        submissionContent: body.submission_content,  // Pass from frontend
+        rubricText: body.rubric_text,                 // Pass from frontend
+        assignmentDescription: body.assignment_description, // Pass from frontend
+      });
+
+      console.log('[gradeWithAI] AI grading service returned:', {
+        gradeId: result.grade.id,
+        aiScore: result.grade.ai_score,
+        confidence: result.grade.confidence,
+        provider: result.provider,
+        processingTimeMs: result.processingTimeMs,
+      });
+
+      const responseData = {
         success: true,
         data: {
           id: result.grade.id,
@@ -480,18 +500,31 @@ export class GradingController {
           created_at: result.grade.created_at,
         },
       };
+
+      console.log('[gradeWithAI] Sending response:', responseData);
+      return responseData;
     } catch (error) {
-      console.error('Error grading with AI:', error);
-      return {
+      console.error('[gradeWithAI] Error grading with AI:', {
+        errorName: error.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        errorType: error instanceof Error ? 'Error instance' : typeof error,
+      });
+      
+      const errorResponse = {
         success: false,
         error: {
           code: 'AI_GRADING_FAILED',
-          message: error.message || 'AI grading failed',
+          message: error instanceof Error ? error.message : 'AI grading failed',
           details: {
-            hint: 'Ensure API key is configured and submission/assignment IDs are valid',
+            hint: 'Ensure AI provider is configured and submission IDs are valid',
+            errorType: error instanceof Error ? error.constructor.name : typeof error,
           },
         },
       };
+
+      console.error('[gradeWithAI] Sending error response:', errorResponse);
+      return errorResponse;
     }
   }
 }
