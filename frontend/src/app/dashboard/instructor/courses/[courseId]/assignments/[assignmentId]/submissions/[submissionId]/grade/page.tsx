@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
-import { Card, LoadingSpinner, SubmissionViewer } from '@/components/common'
+import { Card, LoadingSpinner, SubmissionViewer, FloatingProgressBar } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
+import { useAIGrade } from '@/hooks/useAIGrade'
 
 interface Submission {
   id: string
@@ -54,6 +55,9 @@ export default function GradeSubmissionPage() {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   
+  // AI Grade hook
+  const { generateAIGrade, loading: aiGradeLoading, error: aiGradeError } = useAIGrade()
+  
   // Resizable layout state
   const [leftWidth, setLeftWidth] = useState(50) // percentage
   const [isDragging, setIsDragging] = useState(false)
@@ -68,6 +72,31 @@ export default function GradeSubmissionPage() {
 
   const handleBack = () => {
     router.back()
+  }
+
+  const handleAIGradeClick = async (submissionIdParam: string) => {
+    setError(null)
+    setSuccessMessage(null)
+    
+    const gradeResult = await generateAIGrade(submissionIdParam, assignmentId)
+    
+    if (gradeResult) {
+      // Populate form fields with AI-generated data
+      setFormData({
+        score: gradeResult.ai_score,
+        feedback: gradeResult.feedback,
+        strengths: gradeResult.strengths.join('\n'),
+        improvements: gradeResult.improvements.join('\n'),
+      })
+      
+      // Show success message
+      setSuccessMessage(
+        `✨ AI Grade Generated (${gradeResult.aiProvider}, ${gradeResult.confidence}% confidence, ${gradeResult.processingTimeMs}ms)`
+      )
+      setTimeout(() => setSuccessMessage(null), 5000)
+    } else if (aiGradeError) {
+      setError(`AI grading failed: ${aiGradeError}`)
+    }
   }
 
   // Resizable divider handlers
@@ -134,8 +163,8 @@ export default function GradeSubmissionPage() {
         return
       }
 
-      if (!formData.feedback.trim()) {
-        setError('Feedback is required')
+      if (!formData.feedback.trim() || formData.feedback.trim().length < 20) {
+        setError('Feedback must be at least 20 characters')
         setSaving(false)
         return
       }
@@ -216,7 +245,7 @@ export default function GradeSubmissionPage() {
 
     } catch (error) {
       console.error('Error saving grade:', error)
-      setError('An error occurred while saving the grade')
+      setError(error instanceof Error ? error.message : 'An error occurred while saving the grade')
     } finally {
       setSaving(false)
     }
@@ -264,6 +293,34 @@ export default function GradeSubmissionPage() {
           }))
         }
 
+        // Fetch existing grade if it exists
+        const gradeResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/v1/submissions/${submissionId}/grades`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+
+        if (gradeResponse.ok) {
+          const gradeData = await gradeResponse.json()
+          if (gradeData.success && gradeData.data) {
+            // Pre-populate form with existing grade
+            const existingGrade = gradeData.data
+            setFormData({
+              score: existingGrade.score || 0,
+              feedback: existingGrade.feedback || '',
+              strengths: Array.isArray(existingGrade.strengths) 
+                ? existingGrade.strengths.join('\n') 
+                : (existingGrade.strengths || ''),
+              improvements: Array.isArray(existingGrade.improvements)
+                ? existingGrade.improvements.join('\n')
+                : (existingGrade.improvements || ''),
+            })
+          }
+        }
+
       } catch (error) {
         console.error('Failed to fetch data:', error)
         setError('An error occurred while loading data')
@@ -279,6 +336,9 @@ export default function GradeSubmissionPage() {
 
   return (
     <RoleGuard roles={['instructor', 'admin']}>
+      {/* Floating Progress Bar - shows while AI is grading */}
+      <FloatingProgressBar show={aiGradeLoading} message="🤖 AI Grading..." />
+      
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
@@ -341,10 +401,14 @@ export default function GradeSubmissionPage() {
                   <Card>
                     <SubmissionViewer
                       submissionId={submission.id}
+                      assignmentId={assignmentId}
                       filePath={submission.file_path}
                       fileType={submission.file_type}
-                      assignmentType={assignment.type}
+                      assignmentType={assignment?.type || 'FILE'}
+                      tenantId={user?.tenant_id}
                       isLoading={loading}
+                      onAIGradeClick={handleAIGradeClick}
+                      aiGradeLoading={aiGradeLoading}
                     />
                   </Card>
                 </div>

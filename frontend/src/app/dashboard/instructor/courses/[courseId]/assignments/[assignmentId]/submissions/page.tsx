@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth'
 interface Submission {
   id: string
   student_id: string
+  student_name: string
   version: number
   is_late: boolean
   submitted_at: string
@@ -318,7 +319,7 @@ export default function SubmissionsPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-bold text-gray-900">
-                          Student ID: {submission.student_id}
+                          {submission.student_name} ({submission.student_id.substring(0, 8)}...)
                         </h3>
                         {isLate(submission.submitted_at, assignment?.hard_deadline) ? (
                           <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">

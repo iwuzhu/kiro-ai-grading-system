@@ -27,7 +27,7 @@ import { Grade } from '../entities/grade.entity';
 @Injectable()
 export class GradeRepository extends Repository<Grade> {
   constructor(private dataSource: DataSource) {
-    super(Grade, dataSource.createEntityManager());
+    super(Grade, dataSource.manager);
   }
 
   /**
@@ -171,7 +171,7 @@ export class GradeRepository extends Repository<Grade> {
   async createGrade(data: {
     tenant_id: string;
     submission_id: string;
-    assignment_id: string;
+    assignment_id: string; // Required: foreign key to assignments
     ai_score?: number;
     confidence?: number;
     feedback?: string;
@@ -180,22 +180,27 @@ export class GradeRepository extends Repository<Grade> {
     status?: string;
     graded_by_user_id?: string;
     final_score?: number; // For manual grades
+    question_id?: string | null;
+    grade_type?: 'overall_submission' | 'per_question';
+    grade_details?: Record<string, any> | null;
   }): Promise<Grade> {
-    const grade = this.create({
-      tenant_id: data.tenant_id,
-      submission_id: data.submission_id,
-      assignment_id: data.assignment_id,
-      ai_score: data.ai_score ?? null,
-      confidence: data.confidence ?? null,
-      final_score: data.final_score ?? data.ai_score ?? null,
-      feedback: data.feedback || null,
-      strengths: data.strengths || [],
-      improvements: data.improvements || [],
-      status: (data.status || 'PENDING') as 'PENDING' | 'AI_GRADED' | 'MANUALLY_GRADED' | 'OVERRIDDEN',
-      graded_by_user_id: data.graded_by_user_id || null,
-    });
+    const grade = new Grade();
+    grade.tenant_id = data.tenant_id;
+    grade.submission_id = data.submission_id;
+    grade.assignment_id = data.assignment_id; // Set assignment_id
+    grade.question_id = data.question_id ?? null;
+    grade.grade_type = data.grade_type || 'overall_submission';
+    grade.ai_score = data.ai_score ?? null;
+    grade.confidence = data.confidence ?? null;
+    grade.final_score = data.final_score ?? data.ai_score ?? null;
+    grade.feedback = data.feedback || null;
+    grade.strengths = data.strengths || [];
+    grade.improvements = data.improvements || [];
+    grade.status = (data.status || 'PENDING') as 'PENDING' | 'AI_GRADED' | 'MANUALLY_GRADED' | 'OVERRIDDEN';
+    grade.graded_by_user_id = data.graded_by_user_id || null;
+    grade.grade_details = data.grade_details || null;
 
-    return this.save(grade);
+    return await this.save(grade);
   }
 
   /**

@@ -55,7 +55,7 @@ export class SubmissionManagementService {
     studentId: string,
     filePath: string,
     fileType: string,
-    content?: string,
+    content?: Record<string, any> | string,
   ): Promise<Submission> {
     // Step 1: Validate assignment exists and is published
     const assignment = await this.assignmentRepository.findOne({
@@ -110,6 +110,46 @@ export class SubmissionManagementService {
     // Step 6: Create submission
     const isIncremental = previousSubmissions.length > 0;
 
+    // Simplified content format: {"answers": {"file": uri, ...}}
+    let parsedContent: Record<string, any> = { answers: {} };
+    if (content) {
+      if (typeof content === 'string') {
+        // Legacy string content
+        parsedContent = { 
+          answers: { text: content },
+        };
+      } else if (typeof content === 'object') {
+        // File upload format from controller: {answer: uri, submittedAt: ...}
+        if (content.answer) {
+          parsedContent = {
+            answers: {
+              file: content.answer, // S3 URI
+              submittedAt: content.submittedAt || now,
+            },
+          };
+        } else if (content.answers) {
+          // Already in answers format
+          parsedContent = content;
+        } else {
+          // Generic object
+          parsedContent = { answers: content };
+        }
+      }
+    }
+
+    console.log('[SubmissionManagementService.createSubmission] Creating submission:', {
+      tenantId,
+      assignmentId,
+      studentId,
+      nextVersion,
+      filePath,
+      fileType,
+      parsedContent,
+      isIncremental,
+      isLate,
+      submittedAt: now,
+    });
+
     const submission = await this.submissionRepository.createSubmission({
       tenant_id: tenantId,
       assignment_id: assignmentId,
@@ -117,10 +157,19 @@ export class SubmissionManagementService {
       version: nextVersion,
       file_path: filePath,
       file_type: fileType,
-      content: content || null,
+      content: parsedContent,
       is_incremental: isIncremental,
       is_late: isLate,
       submitted_at: now,
+    });
+
+    console.log('[SubmissionManagementService.createSubmission] Submission created:', {
+      submissionId: submission?.id,
+      assignmentId: submission?.assignment_id,
+      studentId: submission?.student_id,
+      version: submission?.version,
+      content: submission?.content,
+      filePath: submission?.file_path,
     });
 
     return submission;

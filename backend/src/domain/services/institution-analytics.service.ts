@@ -131,8 +131,8 @@ export class InstitutionAnalyticsService {
 
       for (const course of allCourses) {
         const courseGrades = await this.gradeRepository.find({
-          where: { assignment: { course_id: course.id } },
-          relations: ['assignment'],
+          where: { submission: { assignment: { course_id: course.id } } },
+          relations: ['submission', 'submission.assignment'],
         });
 
         for (const grade of courseGrades) {
@@ -246,8 +246,8 @@ export class InstitutionAnalyticsService {
 
         // Get average grade for course
         const grades = await this.gradeRepository.find({
-          where: { assignment: { course_id: course.id } },
-          relations: ['assignment'],
+          where: { submission: { assignment: { course_id: course.id } } },
+          relations: ['submission', 'submission.assignment'],
         });
 
         let totalGrade = 0;

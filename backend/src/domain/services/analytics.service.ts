@@ -490,9 +490,10 @@ export class AnalyticsService {
         const week = Math.floor(index / 3) + 1; // Group assignments into weeks
 
         // Get grades for this assignment
+        // Note: Use submission.assignment_id instead of grade.assignment_id
         const grades = await this.gradeRepository.find({
           where: {
-            assignment_id: assignment.id,
+            submission: { assignment_id: assignment.id },
           },
           relations: ['submission'],
         });

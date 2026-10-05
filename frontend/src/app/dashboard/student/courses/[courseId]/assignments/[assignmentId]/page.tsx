@@ -7,6 +7,8 @@ import { Card, LoadingSpinner, Modal, RubricDisplay, SubmissionModal, Submission
 import { useAuth } from '@/hooks/useAuth'
 import { useSubmission } from '@/hooks/useSubmission'
 import { useAssignmentSubmissions } from '@/hooks/useAssignmentSubmissions'
+import { QuestionGroup } from '@/components/assignments/QuestionCreationDialog'
+import { QuestionList } from '@/components/assignments/QuestionList'
 
 interface Assignment {
   id: string
@@ -20,6 +22,7 @@ interface Assignment {
   allow_incremental: boolean
   late_penalty_percent: number
   rubric_id?: string
+  content?: Record<string, any>
 }
 
 interface Rubric {
@@ -41,6 +44,10 @@ export default function StudentAssignmentDetailPage() {
   const [assignment, setAssignment] = useState<Assignment | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [questionGroups, setQuestionGroups] = useState<QuestionGroup[]>([])
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   // Rubric modal state
   const [isRubricModalOpen, setIsRubricModalOpen] = useState(false)
@@ -92,12 +99,6 @@ export default function StudentAssignmentDetailPage() {
       setRubricError('Error loading rubric')
     } finally {
       setRubricLoading(false)
-    }
-  }
-
-  const handleOpenSubmissionModal = () => {
-    if (!isOverdue(assignment?.hard_deadline)) {
-      setIsSubmissionModalOpen(true)
     }
   }
 
@@ -170,6 +171,12 @@ export default function StudentAssignmentDetailPage() {
       try {
         const token = localStorage.getItem('accessToken')
         
+        console.log('[StudentAssignmentDetail] Fetching assignment...', {
+          assignmentId,
+          apiUrl: process.env.NEXT_PUBLIC_API_URL,
+          timestamp: new Date().toISOString(),
+        })
+        
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/v1/courses/assignments/${assignmentId}`,
           {
@@ -179,16 +186,178 @@ export default function StudentAssignmentDetailPage() {
           }
         )
 
+        console.log('[StudentAssignmentDetail] API Response status:', response.status)
+
         if (response.ok) {
           const data = await response.json()
-          setAssignment(data.data)
+          const assignmentData = data.data
+          
+          console.log('[StudentAssignmentDetail] Assignment data received:', {
+            id: assignmentData.id,
+            title: assignmentData.title,
+            hasContent: !!assignmentData.content,
+            contentType: typeof assignmentData.content,
+            contentKeys: assignmentData.content ? Object.keys(assignmentData.content) : [],
+            contentPreview: assignmentData.content ? JSON.stringify(assignmentData.content).substring(0, 200) : 'N/A',
+            timestamp: new Date().toISOString(),
+          })
+          
+          setAssignment(assignmentData)
+
+          // Parse content into question groups
+          if (assignmentData.content && typeof assignmentData.content === 'object') {
+            try {
+              const groups: QuestionGroup[] = []
+              
+              console.log('[StudentAssignmentDetail] Starting content parsing...', {
+                contentIsArray: Array.isArray(assignmentData.content),
+                timestamp: new Date().toISOString(),
+              })
+
+              // Handle NEW format: { questions: [...] }
+              if (Array.isArray(assignmentData.content.questions)) {
+                console.log('[StudentAssignmentDetail] Detected NEW format (questions array)', {
+                  questionsLength: assignmentData.content.questions.length,
+                })
+                
+                const questions = assignmentData.content.questions as any[]
+                
+                // Group questions by type
+                const questionsByType: Record<string, any[]> = {}
+                questions.forEach((q: any) => {
+                  const type = q.type || 'UNKNOWN'
+                  if (!questionsByType[type]) {
+                    questionsByType[type] = []
+                  }
+                  questionsByType[type].push(q)
+                })
+                
+                console.log('[StudentAssignmentDetail] Grouped questions by type:', {
+                  types: Object.keys(questionsByType),
+                  groupCounts: Object.entries(questionsByType).map(([k, v]) => ({ [k]: v.length })),
+                })
+                
+                // Create groups from grouped questions
+                Object.entries(questionsByType).forEach(([type, qs]) => {
+                  const group: QuestionGroup = {
+                    type: type as any,
+                    questions: qs.map((q: any) => ({
+                      prompt: q.prompt,
+                      result: q.expectedAnswer || q.answer || '',
+                      pointValue: q.pointValue || 0,
+                    })),
+                  }
+                  if (qs[0]?.rubricId) {
+                    group.rubricId = qs[0].rubricId
+                  }
+                  groups.push(group)
+                })
+                
+                console.log('[StudentAssignmentDetail] Created question groups from NEW format:', {
+                  groupsCount: groups.length,
+                  groups: groups.map(g => ({ type: g.type, questionCount: g.questions.length })),
+                })
+              } else if (typeof assignmentData.content === 'object' && !Array.isArray(assignmentData.content)) {
+                // Handle OLD format: { "Essay": { "RubricId": "...", "Question 1": {...} } }
+                console.log('[StudentAssignmentDetail] Detected OLD format (nested object)', {
+                  topLevelKeys: Object.keys(assignmentData.content),
+                })
+                
+                const typeMapping: Record<string, string> = {
+                  'Multiple Choice': 'MULTIPLE_CHOICE',
+                  'Short Answer': 'SHORT_ANSWER',
+                  'Fill in the Blank': 'FILL_BLANK',
+                  'Essay': 'ESSAY',
+                  'Code': 'CODE',
+                  'File Upload': 'FILE_UPLOAD',
+                  'Math': 'MATH',
+                  'Programming': 'PROGRAMMING',
+                }
+
+                Object.entries(assignmentData.content).forEach(([typeLabel, questionsData]: [string, any]) => {
+                  const type = typeMapping[typeLabel] || typeLabel
+                  const questions: any[] = []
+                  let rubricId: string | undefined
+                  let rubricNote: string | undefined
+
+                  if (questionsData && typeof questionsData === 'object') {
+                    Object.entries(questionsData).forEach(([key, value]: [string, any]) => {
+                      if (key === 'RubricId') {
+                        rubricId = value
+                      } else if (key === 'RubricNote') {
+                        rubricNote = value
+                      } else if (key.startsWith('Question ')) {
+                        if (value && typeof value === 'object') {
+                          const promptKey = Object.keys(value)[0]
+                          const questionData = value[promptKey]
+                          if (promptKey && questionData) {
+                            questions.push({
+                              prompt: promptKey,
+                              result: questionData.Result || '',
+                              pointValue: questionData.Points || 0,
+                            })
+                          }
+                        }
+                      }
+                    })
+                  }
+
+                  if (questions.length > 0) {
+                    const group: QuestionGroup = {
+                      type: type as any,
+                      questions,
+                    }
+                    if (rubricId) {
+                      group.rubricId = rubricId
+                    }
+                    if (rubricNote) {
+                      group.rubricNote = rubricNote
+                    }
+                    groups.push(group)
+                  }
+                })
+                
+                console.log('[StudentAssignmentDetail] Created question groups from OLD format:', {
+                  groupsCount: groups.length,
+                  groups: groups.map(g => ({ type: g.type, questionCount: g.questions.length })),
+                })
+              } else {
+                console.warn('[StudentAssignmentDetail] Content format not recognized', {
+                  contentType: typeof assignmentData.content,
+                  isArray: Array.isArray(assignmentData.content),
+                  keys: Object.keys(assignmentData.content),
+                })
+              }
+
+              setQuestionGroups(groups)
+              
+              console.log('[StudentAssignmentDetail] Question groups set:', {
+                totalGroups: groups.length,
+                totalQuestions: groups.reduce((sum, g) => sum + g.questions.length, 0),
+              })
+            } catch (parseError) {
+              console.error('[StudentAssignmentDetail] Error parsing content:', parseError, {
+                content: assignmentData.content,
+              })
+            }
+          } else {
+            console.log('[StudentAssignmentDetail] No content to parse', {
+              hasContent: !!assignmentData.content,
+              contentType: typeof assignmentData.content,
+            })
+          }
         } else if (response.status === 404) {
+          console.warn('[StudentAssignmentDetail] Assignment not found (404)')
           setError('Assignment not found')
         } else {
+          console.error('[StudentAssignmentDetail] Failed to load assignment', {
+            status: response.status,
+            statusText: response.statusText,
+          })
           setError('Failed to load assignment details')
         }
       } catch (error) {
-        console.error('Failed to fetch assignment:', error)
+        console.error('[StudentAssignmentDetail] Exception fetching assignment:', error)
         setError('An error occurred while loading assignment details')
       } finally {
         setLoading(false)
@@ -273,6 +442,87 @@ export default function StudentAssignmentDetailPage() {
                     </p>
                   </div>
                 )}
+
+                {/* Assignment Content Display */}
+                {questionGroups.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                      Assignment Content & Rubrics
+                    </h3>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <QuestionList
+                        questionGroups={questionGroups}
+                        tenantId={user?.tenant_id}
+                        userRole={user?.role as 'student' | 'instructor' | 'admin' | undefined}
+                        onRemoveGroup={() => {}} // No-op, display only
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {questionGroups.length === 0 && assignment.content && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                      Assignment Content & Rubrics
+                    </h3>
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <p className="text-gray-600 text-sm">
+                        Assignment content could not be parsed. This may be a system issue.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Submit Assignment Button */}
+                <div className="flex gap-3 mt-4">
+                  {/* Upload Work File Button */}
+                  <label
+                    className="px-6 py-3 rounded-lg transition font-medium text-white bg-blue-600 hover:bg-blue-700 cursor-pointer inline-block"
+                    title="click to upload your submission"
+                  >
+                    📁 Upload Work File
+                    <input
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setUploadedFile(file)
+                          console.log('[StudentAssignmentDetail] File selected:', {
+                            filename: file.name,
+                            size: file.size,
+                            type: file.type,
+                          })
+                        }
+                      }}
+                      className="hidden"
+                      accept="*/*"
+                    />
+                  </label>
+
+                  {/* Show selected file info */}
+                  {uploadedFile && (
+                    <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
+                      <span className="text-green-700 text-sm font-medium">
+                        ✅ Selected: {uploadedFile.name}
+                      </span>
+                      <button
+                        onClick={() => setUploadedFile(null)}
+                        className="text-green-600 hover:text-green-800 text-xs font-medium"
+                      >
+                        ✕ Clear
+                      </button>
+                    </div>
+                  )}
+                  
+                  {assignment.rubric_id && (
+                    <button
+                      onClick={handleViewRubric}
+                      className="px-6 py-3 rounded-lg transition font-medium text-white bg-blue-600 hover:bg-blue-700"
+                    >
+                      📋 View Rubric
+                    </button>
+                  )}
+                </div>
 
                 {/* Divider */}
                 <div className="border-t border-gray-200"></div>
@@ -363,17 +613,86 @@ export default function StudentAssignmentDetailPage() {
                 
                 <div className="flex flex-wrap gap-3">
                   <button
-                    onClick={handleOpenSubmissionModal}
-                    disabled={isOverdue(assignment.hard_deadline)}
-                    className={`px-4 py-2 rounded-lg transition text-white ${
+                    onClick={async () => {
+                      if (!uploadedFile) {
+                        setError('Please upload a file first')
+                        return
+                      }
+                      
+                      setUploading(true)
+                      setError(null)
+                      
+                      try {
+                        console.log('[StudentAssignmentDetail] Submitting assignment with file...', {
+                          fileName: uploadedFile.name,
+                          fileSize: uploadedFile.size,
+                          assignmentId,
+                          timestamp: new Date().toISOString(),
+                        })
+                        
+                        // Create FormData for file upload
+                        const formData = new FormData()
+                        formData.append('file', uploadedFile)
+                        formData.append('assignmentId', assignmentId)
+                        
+                        const token = localStorage.getItem('accessToken')
+                        const response = await fetch(
+                          `${process.env.NEXT_PUBLIC_API_URL}/v1/submissions/upload`,
+                          {
+                            method: 'POST',
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: formData,
+                          }
+                        )
+                        
+                        console.log('[StudentAssignmentDetail] Upload response status:', response.status)
+                        
+                        if (response.ok) {
+                          const result = await response.json()
+                          console.log('[StudentAssignmentDetail] Submission successful:', {
+                            submissionId: result.data?.id,
+                            fileUri: result.data?.content?.answer,
+                          })
+                          
+                          setSuccess('✅ Assignment submitted successfully!')
+                          setUploadedFile(null)
+                          setError(null)
+                          
+                          // Refetch submissions
+                          await refetchSubmissions()
+                          
+                          // Redirect after 2 seconds to course detail page
+                          setTimeout(() => {
+                            router.push(`/dashboard/student/courses/${params.courseId as string}`)
+                          }, 2000)
+                        } else {
+                          const errorData = await response.json()
+                          const errorMsg = errorData.error?.message || 'Failed to submit assignment'
+                          console.error('[StudentAssignmentDetail] Upload failed:', errorMsg)
+                          setError(errorMsg)
+                        }
+                      } catch (err) {
+                        const errorMsg = err instanceof Error ? err.message : 'An error occurred while submitting'
+                        console.error('[StudentAssignmentDetail] Submission error:', err)
+                        setError(errorMsg)
+                      } finally {
+                        setUploading(false)
+                      }
+                    }}
+                    disabled={isOverdue(assignment.hard_deadline) || !uploadedFile || uploading}
+                    className={`px-4 py-2 rounded-lg transition text-white font-medium ${
                       isOverdue(assignment.hard_deadline)
                         ? 'bg-gray-400 cursor-not-allowed'
+                        : !uploadedFile
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : uploading
+                        ? 'bg-yellow-500 cursor-wait'
                         : 'bg-green-600 hover:bg-green-700'
                     }`}
                   >
-                    {isOverdue(assignment.hard_deadline)
-                      ? 'Submission Closed'
-                      : 'Submit Assignment'}
+                    {uploading ? '⏳ Submitting...' : isOverdue(assignment.hard_deadline) ? 'Submission Closed' : 'Submit Assignment'}
                   </button>
                   
                   {assignment.rubric_id && (
@@ -394,6 +713,20 @@ export default function StudentAssignmentDetailPage() {
                     </button>
                   )}
                 </div>
+                
+                {/* Success Message */}
+                {success && (
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-green-800 text-sm font-medium">{success}</p>
+                  </div>
+                )}
+                
+                {/* Error Message */}
+                {error && (
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-800 text-sm font-medium">{error}</p>
+                  </div>
+                )}
               </div>
             </Card>
 

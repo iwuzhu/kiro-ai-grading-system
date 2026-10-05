@@ -661,7 +661,7 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
           {
             title: 'Quiz: Computer Science Basics',
             description: 'Take this 20-question quiz covering course materials from weeks 1-3. You will have 60 minutes to complete it.',
-            type: 'QUIZ' as const,
+            type: 'MULTIPLE_CHOICE' as const,
             point_value: 25,
             soft_deadline: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
             hard_deadline: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
@@ -671,13 +671,32 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
         ];
 
         for (const assignmentData of assignments) {
+          // Create a default question based on assignment type
+          const question = {
+            id: `q-${Math.random().toString(36).substr(2, 9)}`,
+            type: assignmentData.type,
+            prompt: assignmentData.description,
+            pointValue: assignmentData.point_value,
+            createdAt: now,
+            // Type-specific fields minimal for test data
+            ...(assignmentData.type === 'ESSAY' && { rubricCriteria: [] }),
+            ...(assignmentData.type === 'CODE' && { language: 'python' }),
+            ...(assignmentData.type === 'MULTIPLE_CHOICE' && {
+              options: [
+                { label: 'A', text: 'Option A' },
+                { label: 'B', text: 'Option B' },
+              ],
+              correctAnswer: 'A',
+            }),
+          };
+
           const assignment = assignmentRepo.create({
             tenant_id: institution.tenant_id,
             course_id: cs101.id,
             created_by_user_id: teacher.id,
             title: assignmentData.title,
             description: assignmentData.description,
-            type: assignmentData.type,
+            content: { questions: [question] },
             point_value: assignmentData.point_value,
             soft_deadline: assignmentData.soft_deadline,
             hard_deadline: assignmentData.hard_deadline,
@@ -726,13 +745,25 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
         ];
 
         for (const assignmentData of assignments) {
+          // Create a default question based on assignment type
+          const question = {
+            id: `q-${Math.random().toString(36).substr(2, 9)}`,
+            type: assignmentData.type,
+            prompt: assignmentData.description,
+            pointValue: assignmentData.point_value,
+            createdAt: now,
+            // Type-specific fields minimal for test data
+            ...(assignmentData.type === 'ESSAY' && { rubricCriteria: [] }),
+            ...(assignmentData.type === 'CODE' && { language: 'python' }),
+          };
+
           const assignment = assignmentRepo.create({
             tenant_id: institution.tenant_id,
             course_id: cs201.id,
             created_by_user_id: teacher.id,
             title: assignmentData.title,
             description: assignmentData.description,
-            type: assignmentData.type,
+            content: { questions: [question] },
             point_value: assignmentData.point_value,
             soft_deadline: assignmentData.soft_deadline,
             hard_deadline: assignmentData.hard_deadline,
@@ -781,13 +812,25 @@ export class DatabaseInitializationService implements OnApplicationBootstrap {
         ];
 
         for (const assignmentData of assignments) {
+          // Create a default question based on assignment type
+          const question = {
+            id: `q-${Math.random().toString(36).substr(2, 9)}`,
+            type: assignmentData.type,
+            prompt: assignmentData.description,
+            pointValue: assignmentData.point_value,
+            createdAt: now,
+            // Type-specific fields minimal for test data
+            ...(assignmentData.type === 'ESSAY' && { rubricCriteria: [] }),
+            ...(assignmentData.type === 'CODE' && { language: 'javascript' }),
+          };
+
           const assignment = assignmentRepo.create({
             tenant_id: institution.tenant_id,
             course_id: cs301.id,
             created_by_user_id: teacher.id,
             title: assignmentData.title,
             description: assignmentData.description,
-            type: assignmentData.type,
+            content: { questions: [question] },
             point_value: assignmentData.point_value,
             soft_deadline: assignmentData.soft_deadline,
             hard_deadline: assignmentData.hard_deadline,

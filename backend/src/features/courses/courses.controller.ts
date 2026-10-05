@@ -19,6 +19,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { CourseManagementService } from '../../domain/services/course-management.service';
 import { CourseEnrollmentService } from '../../domain/services/course-enrollment.service';
 import { AssignmentManagementService } from '../../domain/services/assignment-management.service';
+import { RubricRepository } from '../../domain/repositories/rubric.repository';
 import { CreateCourseDto } from './dtos/create-course.dto';
 import { UpdateCourseDto } from './dtos/update-course.dto';
 import { EnrollStudentDto, EnrollStudentsFromCsvDto } from './dtos/enroll-students.dto';
@@ -50,6 +51,8 @@ export class CoursesController {
     private readonly enrollmentService: CourseEnrollmentService,
     @Inject(AssignmentManagementService)
     private readonly assignmentService: AssignmentManagementService,
+    @Inject(RubricRepository)
+    private readonly rubricRepository: RubricRepository,
   ) {}
 
   /**
@@ -125,6 +128,26 @@ export class CoursesController {
       return {
         success: true,
         data: courses,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get all rubrics in tenant
+   * GET /api/v1/courses/rubrics
+   * @param tenantId - Current tenant ID
+   */
+  @Get('rubrics')
+  async getRubrics(@CurrentTenant() tenantId: string) {
+    try {
+      const rubrics = await this.rubricRepository.findByTenant(tenantId);
+      
+      return {
+        success: true,
+        data: rubrics,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -293,15 +316,22 @@ export class CoursesController {
     @Body() enrollStudentDto: EnrollStudentDto,
   ) {
     try {
-      // Find student by email
-      // This would require a UserRepository method: findByEmail
-      // For now, we'll use the enrollment service directly with a user lookup
+      // Validate input
+      if (!enrollStudentDto.email) {
+        throw new BadRequestException('Email is required');
+      }
 
-      // TODO: Implement after UserRepository has findByEmail
+      // Enroll the student by email
+      const enrollment = await this.enrollmentService.enrollStudentByEmail(
+        tenantId,
+        courseId,
+        enrollStudentDto.email,
+      );
 
       return {
         success: true,
-        data: { message: 'Student enrolled' },
+        data: enrollment,
+        message: `Student enrolled successfully in course`,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {

@@ -14,6 +14,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { GradeOverrideService } from '../../domain/services/grade-override.service';
+import { AIGradingService } from '../../domain/services/ai-grading.service';
 import { GradeRepository } from '../../domain/repositories/grade.repository';
 import { UserRole } from '../../infrastructure/auth/types';
 
@@ -36,6 +37,7 @@ export class GradingController {
   constructor(
     private gradeOverrideService: GradeOverrideService,
     private gradeRepository: GradeRepository,
+    private aiGradingService: AIGradingService,
   ) {}
 
   /**
@@ -66,7 +68,7 @@ export class GradingController {
       data: {
         id: grade.id,
         submission_id: grade.submission_id,
-        assignment_id: grade.assignment_id,
+        assignment_id: grade.submission?.assignment_id || null,
         ai_score: grade.ai_score,
         confidence: grade.confidence,
         final_score: grade.final_score,
@@ -105,7 +107,7 @@ export class GradingController {
       data: {
         id: grade.id,
         submission_id: grade.submission_id,
-        assignment_id: grade.assignment_id,
+        assignment_id: grade.submission?.assignment_id || null,
         score: grade.final_score,
         ai_score: grade.ai_score,
         confidence: grade.confidence,
@@ -355,7 +357,7 @@ export class GradingController {
         grade = await this.gradeRepository.createGrade({
           tenant_id: tenantId,
           submission_id: body.submission_id,
-          assignment_id: body.assignment_id,
+          assignment_id: body.assignment_id, // Pass assignment_id
           feedback: body.feedback,
           strengths: body.strengths,
           improvements: body.improvements,
@@ -373,7 +375,7 @@ export class GradingController {
         data: {
           id: grade.id,
           submission_id: grade.submission_id,
-          assignment_id: grade.assignment_id,
+          assignment_id: grade.submission?.assignment_id || null,
           score: grade.final_score,
           confidence: grade.confidence,
           feedback: grade.feedback,
@@ -391,6 +393,103 @@ export class GradingController {
         error: {
           code: 'GRADE_CREATION_FAILED',
           message: error.message || 'Failed to create grade',
+        },
+      };
+    }
+  }
+
+  /**
+   * POST /api/v1/grading/ai-grade
+   * Grade a submission using AI
+   *
+   * Calls ChatGPT (or configured AI provider) to automatically grade
+   * Returns AI-generated score, confidence, feedback, strengths, and improvements
+   *
+   * Property: Confidence Score is Consistent
+   * - AI returns 0-100 confidence score
+   * - Validated and stored as decimal with 2 decimal places
+   *
+   * Property: Grade Explanation Always Provided
+   * - AI feedback: Always provided (min 50 chars from prompt)
+   * - Strengths: At least 2 required by prompt
+   * - Improvements: At least 2 required by prompt
+   *
+   * Property: Human Override Fully Supported
+   * - Instructors can override AI grades via /override endpoint
+   * - Original AI score preserved in grade_details
+   * - Audit trail maintained via GradeOverrideService
+   */
+  @Post('ai-grade')
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async gradeWithAI(
+    @CurrentTenant() tenantId: string,
+    @Body()
+    body: {
+      submission_id: string;
+      assignment_id: string;
+    },
+  ) {
+    try {
+      // Validation: Required fields
+      if (!body.submission_id || !body.assignment_id) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'Missing required fields: submission_id, assignment_id',
+          },
+        };
+      }
+
+      // Inject AIGradingService via constructor (to be added to module)
+      // For now, this demonstrates the endpoint structure
+      const aiGradingService = this.aiGradingService;
+
+      if (!aiGradingService) {
+        return {
+          success: false,
+          error: {
+            code: 'AI_GRADING_UNAVAILABLE',
+            message: 'AI grading service not configured',
+          },
+        };
+      }
+
+      // Call AI grading service
+      const result = await aiGradingService.gradeSubmission({
+        tenantId,
+        submissionId: body.submission_id,
+        assignmentId: body.assignment_id,
+      });
+
+      return {
+        success: true,
+        data: {
+          id: result.grade.id,
+          submission_id: result.grade.submission_id,
+          assignment_id: result.grade.assignment_id,
+          ai_score: result.grade.ai_score,
+          confidence: result.grade.confidence,
+          feedback: result.grade.feedback,
+          strengths: result.grade.strengths,
+          improvements: result.grade.improvements,
+          status: result.grade.status,
+          aiProvider: result.provider,
+          processingTimeMs: result.processingTimeMs,
+          created_at: result.grade.created_at,
+        },
+      };
+    } catch (error) {
+      console.error('Error grading with AI:', error);
+      return {
+        success: false,
+        error: {
+          code: 'AI_GRADING_FAILED',
+          message: error.message || 'AI grading failed',
+          details: {
+            hint: 'Ensure API key is configured and submission/assignment IDs are valid',
+          },
         },
       };
     }

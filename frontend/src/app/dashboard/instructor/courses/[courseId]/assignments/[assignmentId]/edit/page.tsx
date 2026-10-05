@@ -5,6 +5,8 @@ import { useRouter, useParams } from 'next/navigation'
 import { RoleGuard } from '@/components/auth/RoleGuard'
 import { Card, LoadingSpinner } from '@/components/common'
 import { useAuth } from '@/hooks/useAuth'
+import { QuestionGroup } from '@/components/assignments/QuestionCreationDialog'
+import { QuestionList } from '@/components/assignments/QuestionList'
 
 interface Assignment {
   id: string
@@ -18,6 +20,7 @@ interface Assignment {
   allow_incremental: boolean
   late_penalty_percent: number
   rubric_id?: string
+  content?: Record<string, any>
 }
 
 interface FormData {
@@ -28,10 +31,11 @@ interface FormData {
   hard_deadline: string
   allow_incremental: boolean
   late_penalty_percent: number
+  content?: Record<string, any>
 }
 
 export default function EditAssignmentPage() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const params = useParams()
   const courseId = params.courseId as string
@@ -51,11 +55,7 @@ export default function EditAssignmentPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
-  const handleLogout = async () => {
-    await logout()
-    router.replace('/auth/login')
-  }
+  const [questionGroups, setQuestionGroups] = useState<QuestionGroup[]>([])
 
   const handleBack = () => {
     router.back()
@@ -210,7 +210,100 @@ export default function EditAssignmentPage() {
             hard_deadline: formatDateForInput(assignment.hard_deadline),
             allow_incremental: assignment.allow_incremental,
             late_penalty_percent: assignment.late_penalty_percent,
+            content: assignment.content,
           })
+
+          // Load question groups from content if available
+          if (assignment.content && typeof assignment.content === 'object') {
+            const groups: QuestionGroup[] = []
+            
+            // Handle NEW format: { questions: [...] }
+            if (Array.isArray(assignment.content.questions)) {
+              const questions = assignment.content.questions;
+              
+              // Group questions by type
+              const questionsByType: Record<string, any[]> = {};
+              questions.forEach(q => {
+                const type = q.type || 'UNKNOWN';
+                if (!questionsByType[type]) {
+                  questionsByType[type] = [];
+                }
+                questionsByType[type].push(q);
+              });
+              
+              // Create groups from grouped questions
+              Object.entries(questionsByType).forEach(([type, qs]) => {
+                const group: QuestionGroup = {
+                  type: type as any,
+                  questions: qs.map(q => ({
+                    prompt: q.prompt,
+                    result: q.expectedAnswer || q.answer || '',
+                    pointValue: q.pointValue || 0,
+                  })),
+                };
+                groups.push(group);
+              });
+              
+              setQuestionGroups(groups);
+            } else if (typeof assignment.content === 'object' && !Array.isArray(assignment.content)) {
+              // Handle OLD format: { "Essay": { "RubricId": "...", "Question 1": {...} } }
+              const typeMapping: Record<string, string> = {
+                'Multiple Choice': 'MULTIPLE_CHOICE',
+                'Short Answer': 'SHORT_ANSWER',
+                'Fill in the Blank': 'FILL_BLANK',
+                'Essay': 'ESSAY',
+                'Code': 'CODE',
+                'File Upload': 'FILE_UPLOAD',
+                'Math': 'MATH',
+                'Programming': 'PROGRAMMING',
+              }
+
+              Object.entries(assignment.content).forEach(([typeLabel, questionsData]: [string, any]) => {
+                const type = typeMapping[typeLabel] || typeLabel
+                const questions: any[] = []
+                let rubricId: string | undefined
+                let rubricNote: string | undefined
+
+                if (questionsData && typeof questionsData === 'object') {
+                  Object.entries(questionsData).forEach(([key, value]: [string, any]) => {
+                    if (key === 'RubricId') {
+                      rubricId = value
+                    } else if (key === 'RubricNote') {
+                      rubricNote = value
+                    } else if (key.startsWith('Question ')) {
+                      if (value && typeof value === 'object') {
+                        const promptKey = Object.keys(value)[0]
+                        const questionData = value[promptKey]
+                        if (promptKey && questionData) {
+                          questions.push({
+                            prompt: promptKey,
+                            result: questionData.Result || '',
+                            pointValue: questionData.Points || 0,
+                          })
+                        }
+                      }
+                    }
+                  })
+                }
+
+                if (questions.length > 0) {
+                  const group: QuestionGroup = {
+                    type: type as any,
+                    questions,
+                  }
+                  if (rubricId) {
+                    group.rubricId = rubricId
+                  }
+                  if (rubricNote) {
+                    group.rubricNote = rubricNote
+                  }
+                  groups.push(group)
+                }
+              })
+
+              setQuestionGroups(groups)
+            }
+          }
         } else if (response.status === 404) {
           setError('Assignment not found')
         } else {
@@ -245,12 +338,6 @@ export default function EditAssignmentPage() {
               className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
             >
               Back
-            </button>
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-            >
-              Logout
             </button>
           </div>
         </div>
@@ -395,6 +482,29 @@ export default function EditAssignmentPage() {
                   <label htmlFor="allow_incremental" className="ml-3 text-sm font-medium text-gray-700">
                     Allow multiple submissions (incremental grading)
                   </label>
+                </div>
+
+                {/* Assignment Content Section - Display Existing Content */}
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Assignment Content</h3>
+                  
+                  {questionGroups.length > 0 ? (
+                    <div className="mb-6">
+                      <p className="text-sm text-gray-600 mb-4">
+                        The following question groups have been assigned to this assignment:
+                      </p>
+                      <QuestionList
+                        questionGroups={questionGroups}
+                        tenantId={user?.tenant_id}
+                        userRole={user?.role as 'instructor' | 'admin' | undefined}
+                        onRemoveGroup={() => {}} // No-op, display only
+                      />
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                      <p className="text-gray-600 text-sm">No assignment content has been added yet.</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Error Message */}

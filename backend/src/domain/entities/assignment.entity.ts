@@ -19,15 +19,25 @@ import { Submission } from './submission.entity';
 import { PlagiarismResult } from './plagiarism-result.entity';
 
 /**
- * Assignment Entity
+ * Assignment Entity - Multi-Question Architecture
  *
- * Represents an assignment or task assigned to students within a course.
- * Supports multiple assignment types (essay, code, quiz, short-answer, file).
- * Optional rubric attachment for structured grading.
+ * Represents an assignment containing multiple questions of different types.
+ * Supports flexible question types: MULTIPLE_CHOICE, SHORT_ANSWER, FILL_BLANK, ESSAY, CODE, FILE_UPLOAD
+ * Each question stored as JSON in the content field with full structure and metadata.
  *
  * Multi-Tenancy:
  * - tenant_id: Tenant isolation via unique constraint (tenant_id, course_id, title)
  * - course_id: Foreign key to courses table
+ *
+ * Content Structure (JSONB):
+ * - questions: Array of question objects
+ * - Each question has: id, type, prompt, options, pointValue, etc.
+ * - Type-specific fields depending on question type
+ *
+ * Published Status:
+ * - draft: Instructor is editing
+ * - published: Visible to students, submissions accepted
+ * - archived: Closed, no new submissions
  *
  * Deadlines:
  * - soft_deadline: Submission accepted with late penalty after this date
@@ -36,22 +46,18 @@ import { PlagiarismResult } from './plagiarism-result.entity';
  *
  * Late Penalties:
  * - late_penalty_percent: Percentage deduction for late submissions (0-100)
- * - Default: 0 (no penalty)
  *
  * Incremental Submissions:
  * - allow_incremental: If true, students can submit multiple versions before deadline
- * - Each version graded separately if AI grading enabled
  *
  * Acceptance Criteria:
- * ✓ Table created in grading schema
- * ✓ All tables have tenant_id, timestamps, soft delete support
- * ✓ Assignment type enum: ESSAY, CODE, QUIZ, SHORT_ANSWER, FILE
- * ✓ Rubric support optional (rubric_id can be NULL)
+ * ✓ Table created in grading schema with content JSONB
+ * ✓ Supports multiple question types in single assignment
+ * ✓ Published status tracking (draft/published/archived)
+ * ✓ All multi-tenancy features intact
  * ✓ Unique constraint: unique(tenant_id, course_id, title)
  * ✓ Deadline constraint: soft_deadline < hard_deadline
- * ✓ Late penalty validated: 0-100
- * ✓ Foreign keys with proper cascade delete policies
- * ✓ Mapping to Requirements: 5, 6, 7, 13, 16
+ * ✓ Soft delete support via deleted_at
  */
 @Entity('assignments', { schema: 'grading' })
 @Unique('unique_assignment_course_title', ['tenant_id', 'course_id', 'title'])
@@ -62,6 +68,7 @@ import { PlagiarismResult } from './plagiarism-result.entity';
 @Index('idx_assignments_rubric_id', ['rubric_id'])
 @Index('idx_assignments_created_by_user_id', ['created_by_user_id'])
 @Index('idx_assignments_created_at', ['created_at'])
+@Index('idx_assignments_content', ['content'], { fulltext: false })
 export class Assignment {
   /**
    * Primary Key: UUID
@@ -125,21 +132,48 @@ export class Assignment {
   point_value: number | null;
 
   /**
-   * Type
-   * Assignment submission type
-   * - ESSAY: Written essay/prose submission
-   * - CODE: Source code submission
-   * - QUIZ: Multiple choice or short answer quiz
-   * - SHORT_ANSWER: Brief written response
-   * - FILE: Generic file upload (PDF, document, etc.)
+   * Content: JSONB Array of Questions
+   * 
+   * Structure: { questions: Question[] }
+   * 
+   * Each question object contains:
+   * {
+   *   "id": "q-1", // unique question identifier
+   *   "type": "MULTIPLE_CHOICE" | "SHORT_ANSWER" | "FILL_BLANK" | "ESSAY" | "CODE" | "FILE_UPLOAD",
+   *   "prompt": "Question text here",
+   *   "pointValue": 5,
+   *   
+   *   // Type-specific fields:
+   *   // MULTIPLE_CHOICE: options[], correctAnswer
+   *   // SHORT_ANSWER: expectedAnswer, keywords[]
+   *   // FILL_BLANK: blanks[]
+   *   // ESSAY: rubricCriteria[], minWords, maxWords
+   *   // CODE: language, starterCode, testCases[]
+   *   // FILE_UPLOAD: allowedTypes[], maxSizeBytes
+   * }
+   * 
+   * Replaces old single-type architecture.
    */
   @Column({
-    type: 'enum',
-    enum: ['ESSAY', 'CODE', 'QUIZ', 'SHORT_ANSWER', 'FILE'],
+    type: 'jsonb',
     nullable: false,
-    default: 'ESSAY',
+    default: () => "'[]'::jsonb",
   })
-  type: 'ESSAY' | 'CODE' | 'QUIZ' | 'SHORT_ANSWER' | 'FILE';
+  content: Record<string, any>;
+
+  /**
+   * Published Status
+   * - draft: Assignment is being edited by instructor
+   * - published: Assignment is visible to students, submissions accepted
+   * - archived: Assignment is closed, no new submissions
+   */
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: false,
+    default: 'draft',
+  })
+  published_status: 'draft' | 'published' | 'archived';
 
   /**
    * Allow Incremental

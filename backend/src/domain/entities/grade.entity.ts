@@ -12,7 +12,6 @@ import {
   Check,
 } from 'typeorm';
 import { Submission } from './submission.entity';
-import { Assignment } from './assignment.entity';
 import { GradeOverride } from './grade-override.entity';
 import { User } from './user.entity';
 
@@ -59,12 +58,13 @@ import { User } from './user.entity';
  * ✓ Mapping to Requirements: 7, 13, 16
  */
 @Entity('grades', { schema: 'grading' })
-@Unique('unique_grade_submission', ['submission_id'])
+@Unique('unique_grades_submission_question', ['submission_id', 'question_id'])
 @Check('check_ai_score_range', '"ai_score" >= 0 AND "ai_score" <= 100')
 @Check('check_confidence_range', '"confidence" >= 0 AND "confidence" <= 100')
 @Index('idx_grades_tenant_id', ['tenant_id'])
 @Index('idx_grades_submission_id', ['submission_id'])
-@Index('idx_grades_assignment_id', ['assignment_id'])
+@Index('idx_grades_question_id', ['question_id'])
+@Index('idx_grades_grade_type', ['grade_type'])
 @Index('idx_grades_status', ['status'])
 @Index('idx_grades_created_at', ['created_at'])
 export class Grade {
@@ -95,11 +95,50 @@ export class Grade {
   /**
    * Assignment ID: UUID
    * Foreign key to assignments table
-   * References the assignment (denormalized for query efficiency)
-   * Enables quick queries like "get all grades for assignment X"
+   * References the assignment being graded
+   * Required: Denormalized from submission for query performance
    */
   @Column({ type: 'uuid', nullable: false })
   assignment_id: string;
+
+  /**
+   * Question ID: VARCHAR(100) (Optional)
+   * NEW: For per-question grading
+   * References a specific question in the assignment.content array
+   * Null for overall submission grades
+   * When filled, allows multiple grades per submission (one per question)
+   */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  question_id: string | null;
+
+  /**
+   * Grade Type
+   * NEW: Indicates scope of this grade
+   * - overall_submission: Grade for entire submission (question_id = NULL)
+   * - per_question: Grade for specific question (question_id filled)
+   * Default: overall_submission (backward compatible)
+   */
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: false,
+    default: 'overall_submission',
+  })
+  grade_type: 'overall_submission' | 'per_question';
+
+  /**
+   * Grade Details
+   * NEW: Additional grading data as JSONB
+   * Structure varies by question type:
+   * {
+   *   "rubricScores": [{ "criterion": "clarity", "score": 8 }],
+   *   "autoGradingOutput": { "testsPassed": 5, "testsFailed": 0 },
+   *   "keywordMatches": ["Paris", "capital"],
+   *   "wordCount": 250
+   * }
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  grade_details: Record<string, any> | null;
 
   /**
    * AI Score
@@ -234,18 +273,6 @@ export class Grade {
   })
   @JoinColumn({ name: 'submission_id', referencedColumnName: 'id' })
   submission: Submission;
-
-  /**
-   * Assignment
-   * Many-to-one relationship with Assignment entity
-   * Multiple grades can reference same assignment (one per submission)
-   */
-  @ManyToOne(() => Assignment, {
-    onDelete: 'CASCADE',
-    eager: false,
-  })
-  @JoinColumn({ name: 'assignment_id', referencedColumnName: 'id' })
-  assignment: Assignment;
 
   /**
    * Graded By User

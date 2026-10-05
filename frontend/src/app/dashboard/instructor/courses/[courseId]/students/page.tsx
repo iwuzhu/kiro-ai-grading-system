@@ -38,6 +38,11 @@ export default function EnrolledStudentsPage() {
   const [courseName, setCourseName] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null)
+  const [enrollmentSuccess, setEnrollmentSuccess] = useState<string | null>(null)
+  const [studentEmail, setStudentEmail] = useState('')
+  const [enrolling, setEnrolling] = useState(false)
+  const [showEnrollForm, setShowEnrollForm] = useState(false)
 
   const handleLogout = async () => {
     await logout()
@@ -46,6 +51,60 @@ export default function EnrolledStudentsPage() {
 
   const handleBackToCourse = () => {
     router.back()
+  }
+
+  const handleEnrollStudent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setEnrollmentError(null)
+    setEnrollmentSuccess(null)
+    
+    if (!studentEmail.trim()) {
+      setEnrollmentError('Please enter a student email address')
+      return
+    }
+
+    setEnrolling(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/v1/courses/${courseId}/enroll`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: studentEmail.trim(),
+          }),
+        }
+      )
+
+      if (response.ok) {
+        setEnrollmentSuccess(`Student ${studentEmail} enrolled successfully!`)
+        setStudentEmail('')
+        setShowEnrollForm(false)
+        
+        // Refresh the student list
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      } else if (response.status === 400) {
+        const data = await response.json()
+        setEnrollmentError(data.message || 'Invalid email address')
+      } else if (response.status === 404) {
+        setEnrollmentError('Student not found. Please check the email address.')
+      } else if (response.status === 409) {
+        setEnrollmentError('Student is already enrolled in this course')
+      } else {
+        setEnrollmentError('Failed to enroll student. Please try again.')
+      }
+    } catch (error) {
+      console.error('Failed to enroll student:', error)
+      setEnrollmentError('An error occurred while enrolling the student')
+    } finally {
+      setEnrolling(false)
+    }
   }
 
   const formatDate = (dateString?: string) => {
@@ -143,6 +202,12 @@ export default function EnrolledStudentsPage() {
           </div>
           <div className="flex gap-4">
             <button
+              onClick={() => setShowEnrollForm(!showEnrollForm)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+            >
+              {showEnrollForm ? 'Cancel' : '+ Enroll Student'}
+            </button>
+            <button
               onClick={handleBackToCourse}
               className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
             >
@@ -156,6 +221,58 @@ export default function EnrolledStudentsPage() {
             </button>
           </div>
         </div>
+
+        {showEnrollForm && (
+          <Card>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Enroll New Student</h2>
+            {enrollmentError && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-800 rounded">
+                {enrollmentError}
+              </div>
+            )}
+            {enrollmentSuccess && (
+              <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-800 rounded">
+                {enrollmentSuccess}
+              </div>
+            )}
+            <form onSubmit={handleEnrollStudent} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Student Email Address
+                </label>
+                <input
+                  type="email"
+                  value={studentEmail}
+                  onChange={(e) => setStudentEmail(e.target.value)}
+                  placeholder="student@example.com"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={enrolling}
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={enrolling}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                >
+                  {enrolling ? 'Enrolling...' : 'Enroll Student'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEnrollForm(false)
+                    setStudentEmail('')
+                    setEnrollmentError(null)
+                    setEnrollmentSuccess(null)
+                  }}
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </Card>
+        )}
 
         {loading ? (
           <Card>

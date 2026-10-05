@@ -27,7 +27,7 @@ import { Rubric } from '../entities/rubric.entity';
 @Injectable()
 export class RubricRepository extends Repository<Rubric> {
   constructor(private dataSource: DataSource) {
-    super(Rubric, dataSource.createEntityManager());
+    super(Rubric, dataSource.manager);
   }
 
   /**

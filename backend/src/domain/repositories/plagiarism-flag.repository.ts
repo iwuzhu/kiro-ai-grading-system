@@ -32,7 +32,7 @@ import { PlagiarismFlag } from '../entities/plagiarism-flag.entity';
 @Injectable()
 export class PlagiarismFlagRepository extends Repository<PlagiarismFlag> {
   constructor(private dataSource: DataSource) {
-    super(PlagiarismFlag, dataSource.createEntityManager());
+    super(PlagiarismFlag, dataSource.manager);
   }
 
   /**

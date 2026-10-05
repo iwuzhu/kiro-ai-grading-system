@@ -27,7 +27,7 @@ import { GradeOverride } from '../entities/grade-override.entity';
 @Injectable()
 export class GradeOverrideRepository extends Repository<GradeOverride> {
   constructor(private dataSource: DataSource) {
-    super(GradeOverride, dataSource.createEntityManager());
+    super(GradeOverride, dataSource.manager);
   }
 
   /**

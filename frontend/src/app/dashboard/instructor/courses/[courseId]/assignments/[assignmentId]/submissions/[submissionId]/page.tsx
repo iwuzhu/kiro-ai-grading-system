@@ -217,10 +217,10 @@ export default function SubmissionDetailPage() {
 
         if (gradesResponse.ok) {
           const gradesData = await gradesResponse.json()
-          if (gradesData.data) {
+          if (gradesData.success && gradesData.data) {
             // Handle both single grade and array of grades
             const gradeArray = Array.isArray(gradesData.data) ? gradesData.data : [gradesData.data]
-            setGrades(gradeArray)
+            setGrades(gradeArray.filter((g: any) => g !== null && g !== undefined))
           }
         }
         // If no grades found, grades array remains empty

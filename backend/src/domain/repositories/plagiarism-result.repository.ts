@@ -32,7 +32,7 @@ import { PlagiarismResult } from '../entities/plagiarism-result.entity';
 @Injectable()
 export class PlagiarismResultRepository extends Repository<PlagiarismResult> {
   constructor(private dataSource: DataSource) {
-    super(PlagiarismResult, dataSource.createEntityManager());
+    super(PlagiarismResult, dataSource.manager);
   }
 
   /**

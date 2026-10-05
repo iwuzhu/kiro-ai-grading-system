@@ -28,7 +28,8 @@ import { Submission } from '../entities/submission.entity';
 @Injectable()
 export class SubmissionRepository extends Repository<Submission> {
   constructor(private dataSource: DataSource) {
-    super(Submission, dataSource.createEntityManager());
+    // Use the DataSource's manager directly - it's the connected manager
+    super(Submission, dataSource.manager);
   }
 
   /**
@@ -218,25 +219,66 @@ export class SubmissionRepository extends Repository<Submission> {
     version?: number;
     file_path?: string;
     file_type?: string;
-    content?: string;
+    content?: Record<string, any>;
     is_incremental?: boolean;
     is_late?: boolean;
     submitted_at?: Date;
   }): Promise<Submission> {
-    const submission = this.create({
+    console.log('[SubmissionRepository.createSubmission] STARTING save:', {
       tenant_id: data.tenant_id,
       assignment_id: data.assignment_id,
       student_id: data.student_id,
-      version: data.version || 1,
-      file_path: data.file_path || null,
-      file_type: data.file_type || null,
-      content: data.content || null,
-      is_incremental: data.is_incremental || false,
-      is_late: data.is_late || false,
-      submitted_at: data.submitted_at || new Date(),
+      version: data.version,
+      file_path: data.file_path,
+      content: data.content,
     });
 
-    return this.save(submission);
+    const submission = new Submission();
+    submission.tenant_id = data.tenant_id;
+    submission.assignment_id = data.assignment_id;
+    submission.student_id = data.student_id;
+    submission.version = data.version || 1;
+    submission.file_path = data.file_path || null;
+    submission.file_type = data.file_type || null;
+    submission.content = data.content || { answers: {} };
+    submission.is_incremental = data.is_incremental || false;
+    submission.is_late = data.is_late || false;
+    submission.submitted_at = data.submitted_at || new Date();
+
+    console.log('[SubmissionRepository.createSubmission] Entity created:', {
+      id: submission.id,
+      tenant_id: submission.tenant_id,
+      assignment_id: submission.assignment_id,
+      student_id: submission.student_id,
+      content: submission.content,
+    });
+
+    try {
+      const savedSubmission = await this.save(submission);
+      console.log('[SubmissionRepository.createSubmission] ✅ SAVE SUCCESS:', {
+        id: savedSubmission.id,
+        tenant_id: savedSubmission.tenant_id,
+        assignment_id: savedSubmission.assignment_id,
+        student_id: savedSubmission.student_id,
+        version: savedSubmission.version,
+        content: savedSubmission.content,
+        created_at: savedSubmission.created_at,
+      });
+      return savedSubmission;
+    } catch (error) {
+      console.error('[SubmissionRepository.createSubmission] ❌ SAVE FAILED:', {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : null,
+        submissionData: {
+          tenant_id: submission.tenant_id,
+          assignment_id: submission.assignment_id,
+          student_id: submission.student_id,
+          content: submission.content,
+        },
+      });
+      throw error;
+    }
   }
 
   /**

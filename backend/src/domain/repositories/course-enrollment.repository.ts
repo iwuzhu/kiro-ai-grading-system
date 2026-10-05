@@ -29,7 +29,7 @@ import { CourseEnrollment } from '../entities/course-enrollment.entity';
 @Injectable()
 export class CourseEnrollmentRepository extends Repository<CourseEnrollment> {
   constructor(private dataSource: DataSource) {
-    super(CourseEnrollment, dataSource.createEntityManager());
+    super(CourseEnrollment, dataSource.manager);
   }
 
   /**

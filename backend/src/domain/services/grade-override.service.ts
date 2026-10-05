@@ -141,11 +141,11 @@ export class GradeOverrideService {
     tenantId: string,
     assignmentId: string,
   ): Promise<GradeOverride[]> {
-    // Query through grades that reference this assignment
+    // Query through submissions to find grades for this assignment
     const grades = await this.gradeRepository.find({
       where: {
         tenant_id: tenantId,
-        assignment_id: assignmentId,
+        submission: { assignment_id: assignmentId },
         status: 'OVERRIDDEN',
       },
     });

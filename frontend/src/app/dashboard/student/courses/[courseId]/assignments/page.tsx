@@ -29,6 +29,7 @@ export default function StudentAssignmentsPage() {
   const [courseName, setCourseName] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [submissionStatus, setSubmissionStatus] = useState<Record<string, boolean>>({})
 
   const handleLogout = async () => {
     await logout()
@@ -107,7 +108,69 @@ export default function StudentAssignmentsPage() {
 
         if (response.ok) {
           const data = await response.json()
-          setAssignments(data.data || [])
+          const assignmentsData = data.data || []
+          setAssignments(assignmentsData)
+
+          // Fetch submission status for each assignment
+          if (assignmentsData.length > 0) {
+            const statusMap: Record<string, boolean> = {}
+            for (const assignment of assignmentsData) {
+              try {
+                const url = `${process.env.NEXT_PUBLIC_API_URL}/v1/submissions/assignments/${assignment.id}/history`
+                console.log('[StudentAssignmentsPage] Checking submission status for assignment:', {
+                  assignmentId: assignment.id,
+                  assignmentTitle: assignment.title,
+                  url,
+                })
+                
+                const submissionResponse = await fetch(url, {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                })
+                
+                console.log('[StudentAssignmentsPage] Submission response status:', {
+                  assignmentId: assignment.id,
+                  status: submissionResponse.status,
+                  ok: submissionResponse.ok,
+                })
+                
+                if (submissionResponse.ok) {
+                  const submissionData = await submissionResponse.json()
+                  console.log('[StudentAssignmentsPage] Submission data:', {
+                    assignmentId: assignment.id,
+                    isArray: Array.isArray(submissionData),
+                    dataKeys: submissionData ? Object.keys(submissionData) : [],
+                    data: submissionData,
+                  })
+                  
+                  const submissions = Array.isArray(submissionData) ? submissionData : submissionData.data || []
+                  const hasSubmission = submissions.length > 0
+                  statusMap[assignment.id] = hasSubmission
+                  
+                  console.log('[StudentAssignmentsPage] Submission count:', {
+                    assignmentId: assignment.id,
+                    count: submissions.length,
+                    hasSubmission,
+                  })
+                } else {
+                  console.warn('[StudentAssignmentsPage] Submission response not ok:', {
+                    assignmentId: assignment.id,
+                    status: submissionResponse.status,
+                  })
+                  statusMap[assignment.id] = false
+                }
+              } catch (err) {
+                console.error('[StudentAssignmentsPage] Error checking submission status:', {
+                  assignmentId: assignment.id,
+                  error: err,
+                })
+                statusMap[assignment.id] = false
+              }
+            }
+            console.log('[StudentAssignmentsPage] Final submission status map:', statusMap)
+            setSubmissionStatus(statusMap)
+          }
         } else if (response.status === 404) {
           setError('Course not found')
         } else {
@@ -183,6 +246,11 @@ export default function StudentAssignmentsPage() {
                       >
                         {assignment.type}
                       </span>
+                      {submissionStatus[assignment.id] && (
+                        <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                          ✓ Submitted
+                        </span>
+                      )}
                       {isOverdue(assignment.hard_deadline) && (
                         <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
                           Overdue

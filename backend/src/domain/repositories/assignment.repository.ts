@@ -27,7 +27,7 @@ import { Assignment } from '../entities/assignment.entity';
 @Injectable()
 export class AssignmentRepository extends Repository<Assignment> {
   constructor(private dataSource: DataSource) {
-    super(Assignment, dataSource.createEntityManager());
+    super(Assignment, dataSource.manager);
   }
 
   /**
@@ -101,6 +101,31 @@ export class AssignmentRepository extends Repository<Assignment> {
   }
 
   /**
+   * Find assignment by title in a specific course (including soft-deleted)
+   * Used to check for uniqueness when creating new assignments
+   * @param tenantId - The tenant ID
+   * @param courseId - The course ID
+   * @param title - The assignment title
+   * @returns Assignment or null if not found
+   */
+  async findByTitleInCourse(
+    tenantId: string,
+    courseId: string,
+    title: string,
+  ): Promise<Assignment | null> {
+    // Include soft-deleted records to enforce uniqueness constraint
+    // Hard-delete soft-deleted records if they prevent new ones from being created
+    return this.findOne({
+      where: {
+        tenant_id: tenantId,
+        course_id: courseId,
+        title: title,
+      },
+      relations: ['course', 'rubric'],
+    });
+  }
+
+  /**
    * Find assignments by type
    * @param tenantId - The tenant ID
    * @param type - The assignment type
@@ -110,15 +135,9 @@ export class AssignmentRepository extends Repository<Assignment> {
     tenantId: string,
     type: string,
   ): Promise<Assignment[]> {
-    return this.find({
-      where: {
-        tenant_id: tenantId,
-        type: type as 'ESSAY' | 'CODE' | 'QUIZ' | 'SHORT_ANSWER' | 'FILE',
-        deleted_at: null,
-      },
-      relations: ['course', 'rubric'],
-      order: { created_at: 'DESC' },
-    });
+    // Note: type field no longer exists in new schema
+    // This method is deprecated but kept for backward compatibility
+    return [];
   }
 
   /**

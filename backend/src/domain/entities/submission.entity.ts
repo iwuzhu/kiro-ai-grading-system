@@ -134,18 +134,67 @@ export class Submission {
    * Used for validation and routing to appropriate AI provider
    * Null for submissions without files
    */
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   file_type: string | null;
 
   /**
-   * Content
-   * Text submission content for essay/short answer/quiz submissions
-   * Stores the actual student written content
-   * Null for file-based submissions
-   * Unlimited length (TEXT type)
+   * Content: JSONB Object with Answers Array
+   * 
+   * NEW: Replaces old TEXT content field with JSONB structure
+   * 
+   * Structure:
+   * {
+   *   "answers": [
+   *     {
+   *       "questionId": "q-1",
+   *       "type": "MULTIPLE_CHOICE",
+   *       "answer": "B",  // Type depends on question type
+   *       "files": [],    // For file-based questions
+   *       "submittedAt": "2024-10-01T12:30:00Z"
+   *     },
+   *     {
+   *       "questionId": "q-2",
+   *       "type": "ESSAY",
+   *       "answer": "Long essay text here...",
+   *       "submittedAt": "2024-10-01T12:30:00Z"
+   *     }
+   *   ],
+   *   "startedAt": "2024-10-01T12:00:00Z",
+   *   "completedAt": "2024-10-01T12:30:00Z"
+   * }
+   * 
+   * Allows multiple answers per submission (one per question)
+   * Stores files as S3 URIs rather than inline
    */
-  @Column({ type: 'text', nullable: true })
-  content: string | null;
+  @Column({
+    type: 'jsonb',
+    nullable: false,
+    default: () => "'{\"answers\": []}'::jsonb",
+  })
+  content: Record<string, any>;
+
+  /**
+   * Answer Status
+   * NEW: Tracks submission progress state
+   * - in_progress: Student is still answering questions
+   * - submitted: All answers submitted, ready for grading
+   * - graded: Grading completed
+   */
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: false,
+    default: 'submitted',
+  })
+  answer_status: 'in_progress' | 'submitted' | 'graded';
+
+  /**
+   * Question Count
+   * NEW: Cached count of answered questions for performance
+   * Dynamically calculated from content.answers.length
+   */
+  @Column({ type: 'integer', nullable: false, default: 0 })
+  question_count: number;
 
   /**
    * Is Late

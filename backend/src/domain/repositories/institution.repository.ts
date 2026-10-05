@@ -24,7 +24,7 @@ import { Institution } from '../entities/institution.entity';
 @Injectable()
 export class InstitutionRepository extends Repository<Institution> {
   constructor(private dataSource: DataSource) {
-    super(Institution, dataSource.createEntityManager());
+    super(Institution, dataSource.manager);
   }
 
   /**

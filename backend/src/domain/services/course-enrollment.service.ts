@@ -28,6 +28,30 @@ export class CourseEnrollmentService {
   ) {}
 
   /**
+   * Enroll a single student by email
+   * @param tenantId - Tenant ID
+   * @param courseId - Course ID
+   * @param studentEmail - Student email
+   * @returns Enrollment record
+   */
+  async enrollStudentByEmail(
+    tenantId: string,
+    courseId: string,
+    studentEmail: string,
+  ): Promise<any> {
+    // Find student by email
+    const student = await this.userRepository.findByEmail(tenantId, studentEmail);
+    if (!student) {
+      throw new NotFoundException(
+        `Student with email "${studentEmail}" not found in this institution`,
+      );
+    }
+
+    // Enroll the student by ID
+    return this.enrollStudent(tenantId, courseId, student.id);
+  }
+
+  /**
    * Enroll a single student in a course
    * @param tenantId - Tenant ID
    * @param courseId - Course ID

@@ -56,9 +56,9 @@ export class IncrementalGradeAggregationService {
   }> {
     // Get all submissions
     const submissions = await this.submissionRepository.findByAssignmentAndStudent(
-      tenantId,
-      assignmentId,
       studentId,
+      assignmentId,
+      tenantId,
     );
 
     if (submissions.length === 0) {
@@ -172,9 +172,9 @@ export class IncrementalGradeAggregationService {
     improvement: number; // Percentage improvement from first to last
   }> {
     const submissions = await this.submissionRepository.findByAssignmentAndStudent(
-      tenantId,
-      assignmentId,
       studentId,
+      assignmentId,
+      tenantId,
     );
 
     const versionData = [];
@@ -262,9 +262,9 @@ export class IncrementalGradeAggregationService {
     studentId: string,
   ): Promise<boolean> {
     const submissions = await this.submissionRepository.findByAssignmentAndStudent(
-      tenantId,
-      assignmentId,
       studentId,
+      assignmentId,
+      tenantId,
     );
 
     const grades = await Promise.all(
@@ -304,8 +304,8 @@ export class IncrementalGradeAggregationService {
     std_dev: number;
   }> {
     const submissions = await this.submissionRepository.findByAssignment(
-      tenantId,
       assignmentId,
+      tenantId,
     );
 
     const studentIds = new Set(submissions.map(s => s.student_id));

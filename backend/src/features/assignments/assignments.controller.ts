@@ -66,7 +66,7 @@ export class AssignmentsController {
    * @param userId - Current user ID
    * @param createAssignmentDto - Assignment data
    */
-  @Post('courses/:course_id/assignments')
+  @Post(':course_id/assignments')
   @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
   async createAssignment(
     @Param('course_id') courseId: string,
@@ -75,19 +75,34 @@ export class AssignmentsController {
     @Body() createAssignmentDto: CreateAssignmentDto,
   ) {
     try {
+      // Prepare assignment data
+      const assignmentData: any = {
+        ...createAssignmentDto,
+        soft_deadline: createAssignmentDto.soft_deadline
+          ? new Date(createAssignmentDto.soft_deadline)
+          : undefined,
+        hard_deadline: createAssignmentDto.hard_deadline
+          ? new Date(createAssignmentDto.hard_deadline)
+          : undefined,
+      };
+
+      // Remove undefined fields to avoid overwriting defaults
+      Object.keys(assignmentData).forEach(key => {
+        if (assignmentData[key] === undefined) {
+          delete assignmentData[key];
+        }
+      });
+
+      // If content is provided, ensure published_status is set
+      if (assignmentData.content && !assignmentData.published_status) {
+        assignmentData.published_status = 'draft';
+      }
+
       const assignment = await this.assignmentService.createAssignment(
         tenantId,
         courseId,
         user.id,
-        {
-          ...createAssignmentDto,
-          soft_deadline: createAssignmentDto.soft_deadline
-            ? new Date(createAssignmentDto.soft_deadline)
-            : undefined,
-          hard_deadline: createAssignmentDto.hard_deadline
-            ? new Date(createAssignmentDto.hard_deadline)
-            : undefined,
-        },
+        assignmentData,
       );
 
       return {
@@ -108,7 +123,7 @@ export class AssignmentsController {
    * @param userId - Current user ID
    * @param userRole - Current user role
    */
-  @Get('courses/:course_id/assignments')
+  @Get(':course_id/assignments')
   async getAssignments(
     @Param('course_id') courseId: string,
     @CurrentTenant() tenantId: string,
@@ -297,150 +312,6 @@ export class AssignmentsController {
       return {
         success: true,
         data: assignment,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Create a rubric
-   * POST /api/v1/{institution_id}/rubrics
-   * @param tenantId - Current tenant ID
-   * @param userId - Current user ID
-   * @param createRubricDto - Rubric data
-   */
-  @Post('rubrics')
-  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
-  async createRubric(
-    @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
-    @Body() createRubricDto: CreateRubricDto,
-  ) {
-    try {
-      // Parse and validate rubric criteria
-      const parsedCriteria = this.rubricParser.parseObject(
-        createRubricDto.criteria,
-      );
-
-      // TODO: Create rubric via RubricRepository
-      // const rubric = await this.rubricRepository.createRubric({
-      //   tenant_id: tenantId,
-      //   name: createRubricDto.name,
-      //   description: createRubricDto.description,
-      //   criteria: parsedCriteria,
-      //   created_by_user_id: user.sub,
-      //   is_template: createRubricDto.is_template || false,
-      // });
-
-      return {
-        success: true,
-        data: { message: 'Rubric created' },
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Get rubric by ID
-   * GET /api/v1/{institution_id}/rubrics/{rubric_id}
-   * @param rubricId - Rubric ID
-   * @param tenantId - Current tenant ID
-   */
-  @Get('rubrics/:rubric_id')
-  async getRubric(
-    @Param('rubric_id') rubricId: string,
-    @CurrentTenant() tenantId: string,
-  ) {
-    try {
-      const rubric = await this.rubricRepository.findById(tenantId, rubricId);
-      
-      if (!rubric) {
-        throw new NotFoundException('Rubric', rubricId);
-      }
-
-      return {
-        success: true,
-        data: rubric,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Get all rubrics in tenant
-   * GET /api/v1/{institution_id}/rubrics
-   * @param tenantId - Current tenant ID
-   */
-  @Get('rubrics')
-  async getRubrics(@CurrentTenant() tenantId: string) {
-    try {
-      const rubrics = await this.rubricRepository.findByTenant(tenantId);
-
-      return {
-        success: true,
-        data: rubrics,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Update rubric
-   * PATCH /api/v1/{institution_id}/rubrics/{rubric_id}
-   * @param rubricId - Rubric ID
-   * @param tenantId - Current tenant ID
-   * @param userId - Current user ID
-   * @param updateRubricDto - Fields to update
-   */
-  @Patch('rubrics/:rubric_id')
-  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
-  async updateRubric(
-    @Param('rubric_id') rubricId: string,
-    @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
-    @Body() updateRubricDto: any,
-  ) {
-    try {
-      // TODO: Update rubric via RubricRepository
-
-      return {
-        success: true,
-        data: { message: 'Rubric updated' },
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Delete rubric
-   * DELETE /api/v1/{institution_id}/rubrics/{rubric_id}
-   * @param rubricId - Rubric ID
-   * @param tenantId - Current tenant ID
-   * @param userId - Current user ID
-   */
-  @Delete('rubrics/:rubric_id')
-  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
-  async deleteRubric(
-    @Param('rubric_id') rubricId: string,
-    @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
-  ) {
-    try {
-      // TODO: Delete rubric via RubricRepository
-
-      return {
-        success: true,
-        data: { message: 'Rubric deleted' },
         timestamp: new Date().toISOString(),
       };
     } catch (error) {

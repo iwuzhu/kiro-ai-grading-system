@@ -89,7 +89,6 @@ export class GradingEngineService {
       this.gradeRepository.create({
         tenant_id: tenantId,
         submission_id: submissionId,
-        assignment_id: submission.assignment_id,
         status: 'PENDING',
       }),
     );
@@ -99,12 +98,16 @@ export class GradingEngineService {
       const provider = await this.aiProviderFactory.getDefaultProvider();
 
       // Step 4: Construct prompt
+      // Note: assignment.type no longer exists; question types are in assignment.content.questions
+      const assignmentContent = assignment.content as any;
+      const questionTypes = assignmentContent?.questions?.map((q: any) => q.type).join(', ') || 'Unknown';
+      
       const prompt = this.promptConstructionService.buildGradingPrompt(
         assignment.description || '',
-        assignment.type,
+        questionTypes,
         assignment.rubric || 'No rubric provided',
         submissionText,
-        submission.file_type || undefined,
+        undefined,
       );
 
       // Step 5: Grade with timeout and retries

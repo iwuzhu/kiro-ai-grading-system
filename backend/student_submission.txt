@@ -1,0 +1,40 @@
+Security Vulnerability Analysis - Student Submission
+
+Question 1: Identify the two security vulnerabilities
+The two main vulnerabilities in this application are:
+1. Cross-Site Scripting (XSS) vulnerability due to lack of input validation
+2. Insecure password storage - passwords are stored in plaintext
+
+Question 2: How a malicious actor could exploit these vulnerabilities
+
+XSS Vulnerability:
+An attacker could submit a comment containing malicious JavaScript code like:
+<script>alert('hacked')</script>
+
+When this comment appears on the public page, the script would execute in other users' browsers. The attacker could use this to steal session cookies or tokens, allowing them to hijack user accounts. They could also redirect users to phishing sites or capture keystrokes.
+
+Plaintext Password Vulnerability:
+If an attacker manages to breach the database (through SQL injection, insider threat, or server compromise), they would immediately have access to all user passwords in readable form. Since many people reuse passwords across multiple sites (like email, banking, social media), a single database breach could compromise user accounts across many platforms.
+
+Question 3: Recommend specific technical fixes
+
+For XSS:
+- Implement input validation to reject or sanitize user input before storing it
+- Use HTML entity encoding when displaying user comments (convert < to &lt;, > to &gt;, etc.)
+- Implement Content Security Policy (CSP) headers to restrict where scripts can be loaded from
+- Use a web framework that has built-in XSS protection like React which auto-escapes JSX values
+
+For Plaintext Passwords:
+- Hash all passwords using a strong hashing algorithm like bcrypt, scrypt, or Argon2
+- Never store plain text passwords in the database
+- Add a salt to each password hash to prevent rainbow table attacks
+- Use a slow hashing algorithm so brute force attacks are computationally expensive
+
+Question 4: Why security by obscurity doesn't work
+
+Security by obscurity (hiding how a system works) is insufficient because:
+- Determined attackers can reverse-engineer code and discover vulnerabilities
+- Source code can be leaked or stolen
+- System design details often become known over time
+- It doesn't prevent attacks once the vulnerability is discovered
+- True security must be based on strong technical controls and cryptography, not on hiding implementation details
